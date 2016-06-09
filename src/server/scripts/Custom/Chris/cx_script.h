@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2018 TrinityCore <https://www.trinitycore.org/>
+ * Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -15,12 +15,16 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-// This is where scripts' loading functions should be declared:
-void AddSC_cx_cheat_commandscript();
+/*
+ * Copyright (C) 2010-2016 Chris Infinity <http://www.ixvin.com/>
+ * All rights reserved.
+ */
+ 
+/* ScriptData
+Name: cx_script.h
+%Complete: 100%
+Comment: Chris cheat header.
+Category: commandscripts
+EndScriptData */
 
-// The name of this function should match:
-// void Add${NameOfDirectory}Scripts()
-void AddCustomScripts()
-{
-    AddSC_cx_cheat_commandscript();
-}
+#define WORLD_CHAT_COST 10000
