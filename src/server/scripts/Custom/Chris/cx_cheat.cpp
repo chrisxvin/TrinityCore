@@ -22,7 +22,7 @@
 
   /* ScriptData
   Name: cx_cheat_commandscript
-  %Complete: 1
+  %Complete: 100
   Comment: Chris cheat commands.
   Category: commandscripts
   EndScriptData */

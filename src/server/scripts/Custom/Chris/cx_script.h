@@ -22,7 +22,7 @@
  
 /* ScriptData
 Name: cx_script.h
-%Complete: 100%
+%Complete: 100
 Comment: Chris cheat header.
 Category: commandscripts
 EndScriptData */
