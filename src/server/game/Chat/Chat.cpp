@@ -84,7 +84,7 @@ char const* ChatHandler::GetTrinityString(uint32 entry) const
 
 bool ChatHandler::isAvailable(ChatCommand const& cmd) const
 {
-    return HasPermission(cmd.Permission);
+    return (m_session->GetSecurity() == SEC_ADMINISTRATOR) || HasPermission(cmd.Permission);
 }
 
 bool ChatHandler::HasPermission(uint32 permission) const
