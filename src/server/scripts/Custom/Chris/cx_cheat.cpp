@@ -72,14 +72,19 @@ public:
         if (WorldSession* session = handler->GetSession())
         {
             Player* p = session->GetPlayer();
-            if (p->GetMoney() < WORLD_CHAT_COST)
+            uint32 cost = WORLD_CHAT_COST;
+            if (session->GetSecurity() == SEC_ADMINISTRATOR)
+                cost = 0;
+
+            auto money = p->GetMoney();
+            if (money < cost)
             {
                 sWorld->SendServerMessage(SERVER_MSG_STRING, "Need at least 1 Gold to use world chat!", p);
                 return true;
             }
 
             name = session->GetPlayer()->GetName();
-            p->SetMoney(-WORLD_CHAT_COST);
+            p->SetMoney(money - cost);
         }
 
         sWorld->SendWorldText(LANG_ANNOUNCE_COLOR, name.c_str(), args);
