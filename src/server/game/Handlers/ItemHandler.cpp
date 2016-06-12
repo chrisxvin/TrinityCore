@@ -30,6 +30,7 @@
 #include "QueryPackets.h"
 #include "World.h"
 #include "WorldPacket.h"
+#include "ItemExt.h"
 
 void WorldSession::HandleSplitItemOpcode(WorldPacket& recvData)
 {
@@ -1005,7 +1006,8 @@ void WorldSession::HandleWrapItemOpcode(WorldPacket& recvData)
         return;
     }
 
-    if (item->IsSoulBound())
+    uint32 giftid = gift->GetEntry();
+    if (item->IsSoulBound() && giftid != CXITEM_UPGRADE_TOOLBOX && giftid != CXITEM_UNBINDER)
     {
         _player->SendEquipError(EQUIP_ERR_BOUND_CANT_BE_WRAPPED, item, nullptr);
         return;
@@ -1024,6 +1026,21 @@ void WorldSession::HandleWrapItemOpcode(WorldPacket& recvData)
         return;
     }
 
+    /***************    Chris Extensions       ***************/
+    bool processed = false;
+    switch (gift->GetEntry())
+    {
+        case CXITEM_UPGRADE_TOOLBOX:       // wrapper is Item_Upgrade_Toolbox
+            //UpgradeItem(item);
+            processed = true;
+            break;
+        case CXITEM_UNBINDER:              // wrapper is Item_Unbonder
+            item->SetBinding(false);
+            processed = true;
+            break;
+    }
+    /***************    Chris Extensions       ***************/
+  if (!processed) {
     SQLTransaction trans = CharacterDatabase.BeginTransaction();
 
     PreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_INS_CHAR_GIFT);
@@ -1055,6 +1072,7 @@ void WorldSession::HandleWrapItemOpcode(WorldPacket& recvData)
         item->SaveToDB(trans);                                   // item gave inventory record unchanged and can be save standalone
     }
     CharacterDatabase.CommitTransaction(trans);
+  }
 
     uint32 count = 1;
     _player->DestroyItemCount(gift, count, true);
