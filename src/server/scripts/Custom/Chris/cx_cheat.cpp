@@ -33,6 +33,7 @@
 #include "AccountMgr.h"
 #include "Language.h"
 #include "World.h"
+#include "WorldSession.h"
 #include "Player.h"
 #include "Opcodes.h"
 #include "cx_script.h"
