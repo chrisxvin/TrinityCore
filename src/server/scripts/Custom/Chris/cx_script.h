@@ -27,4 +27,4 @@ Comment: Chris cheat header.
 Category: commandscripts
 EndScriptData */
 
-#define WORLD_CHAT_COST 10000
+#define WORLD_TALK_COST 10000

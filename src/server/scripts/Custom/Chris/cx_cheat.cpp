@@ -58,13 +58,13 @@ public:
         */
         static std::vector<ChatCommand> commandTable =
         {
-            { "wc",      rbac::RBAC_PERM_COMMAND_HELP,            false, &HandleWorldChatCommand, ""},
+            { "wt",      rbac::RBAC_PERM_COMMAND_HELP,            false, &HandleWorldTalkCommand, ""},
             //{ "gm", rbac::RBAC_PERM_COMMAND_GPS, false, NULL, "", gmCommandTable },
         };
         return commandTable;
     }
 
-    static bool HandleWorldChatCommand(ChatHandler* handler, char const* args)
+    static bool HandleWorldTalkCommand(ChatHandler* handler, char const* args)
     {
         if (!*args)
             return false;
@@ -73,14 +73,14 @@ public:
         if (WorldSession* session = handler->GetSession())
         {
             Player* p = session->GetPlayer();
-            uint32 cost = WORLD_CHAT_COST;
+            uint32 cost = WORLD_TALK_COST;
             if (session->GetSecurity() == SEC_ADMINISTRATOR)
                 cost = 0;
 
             auto money = p->GetMoney();
             if (money < cost)
             {
-                sWorld->SendServerMessage(SERVER_MSG_STRING, "Need at least 1 Gold to use world chat!", p);
+                sWorld->SendServerMessage(SERVER_MSG_STRING, "Need at least 1 Gold to talk to the world!", p);
                 return true;
             }
 
