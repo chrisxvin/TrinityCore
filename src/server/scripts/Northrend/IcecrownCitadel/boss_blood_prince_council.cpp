@@ -331,7 +331,7 @@ class boss_blood_council_controller : public CreatureScript
                         // Make sure looting is allowed
                         if (me->IsDamageEnoughForLootingAndReward())
                             prince->LowerPlayerDamageReq(prince->GetMaxHealth());
-                        killer->Kill(prince);
+                        Unit::Kill(killer, prince);
                     }
                 }
             }
@@ -647,7 +647,7 @@ class boss_prince_keleseth_icc : public CreatureScript
                 summons.Summon(summon);
                 Position pos = me->GetPosition();
                 float maxRange = me->GetDistance2d(summon);
-                float angle = me->GetAngle(summon);
+                float angle = me->GetAbsoluteAngle(summon);
                 me->MovePositionToFirstCollision(pos, maxRange, angle);
                 summon->NearTeleportTo(pos.GetPositionX(), pos.GetPositionY(), pos.GetPositionZ(), pos.GetOrientation());
                 summon->ToTempSummon()->SetTempSummonType(TEMPSUMMON_CORPSE_DESPAWN);
@@ -1496,16 +1496,16 @@ class spell_blood_council_shadow_prison_damage : public SpellScriptLoader
         {
             PrepareSpellScript(spell_blood_council_shadow_prison_SpellScript);
 
-            void AddExtraDamage()
+            void AddExtraDamage(SpellEffIndex /*effIndex*/)
             {
                 if (Aura* aur = GetHitUnit()->GetAura(GetSpellInfo()->Id))
                     if (AuraEffect const* eff = aur->GetEffect(EFFECT_1))
-                        SetHitDamage(GetHitDamage() + eff->GetAmount());
+                        SetEffectValue(GetEffectValue() + eff->GetAmount());
             }
 
             void Register() override
             {
-                OnHit += SpellHitFn(spell_blood_council_shadow_prison_SpellScript::AddExtraDamage);
+                OnEffectLaunchTarget += SpellEffectFn(spell_blood_council_shadow_prison_SpellScript::AddExtraDamage, EFFECT_0, SPELL_EFFECT_SCHOOL_DAMAGE);
             }
         };
 

@@ -75,7 +75,7 @@ public:
 
         void DamageTaken(Unit* pDoneBy, uint32& uiDamage) override
         {
-            if (uiDamage > me->GetHealth() && pDoneBy->GetTypeId() == TYPEID_PLAYER)
+            if (uiDamage > me->GetHealth() && pDoneBy && pDoneBy->GetTypeId() == TYPEID_PLAYER)
             {
                 uiDamage = 0;
                 pDoneBy->CastSpell(pDoneBy, SPELL_KILL_CREDIT, true);
@@ -751,7 +751,7 @@ class npc_frostbrood_skytalon : public CreatureScript
                     {
                         Position randomPosOnRadius;
                         randomPosOnRadius.m_positionZ = (me->GetPositionZ() + 40.0f);
-                        me->GetNearPoint2D(randomPosOnRadius.m_positionX, randomPosOnRadius.m_positionY, 40.0f, me->GetAngle(me));
+                        me->GetNearPoint2D(nullptr, randomPosOnRadius.m_positionX, randomPosOnRadius.m_positionY, 40.0f, me->GetAbsoluteAngle(me));
                         me->GetMotionMaster()->MovePoint(POINT_FLY_AWAY, randomPosOnRadius);
                     }
                 }

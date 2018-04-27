@@ -574,19 +574,6 @@ void World::LoadConfigSettings(bool reload)
     for (uint8 i = 0; i < MAX_MOVE_TYPE; ++i) playerBaseMoveSpeed[i] = baseMoveSpeed[i] * rate_values[RATE_MOVESPEED];
     rate_values[RATE_CORPSE_DECAY_LOOTED] = sConfigMgr->GetFloatDefault("Rate.Corpse.Decay.Looted", 0.5f);
 
-    rate_values[RATE_TARGET_POS_RECALCULATION_RANGE] = sConfigMgr->GetFloatDefault("TargetPosRecalculateRange", 1.5f);
-    if (rate_values[RATE_TARGET_POS_RECALCULATION_RANGE] < CONTACT_DISTANCE)
-    {
-        TC_LOG_ERROR("server.loading", "TargetPosRecalculateRange (%f) must be >= %f. Using %f instead.", rate_values[RATE_TARGET_POS_RECALCULATION_RANGE], CONTACT_DISTANCE, CONTACT_DISTANCE);
-        rate_values[RATE_TARGET_POS_RECALCULATION_RANGE] = CONTACT_DISTANCE;
-    }
-    else if (rate_values[RATE_TARGET_POS_RECALCULATION_RANGE] > NOMINAL_MELEE_RANGE)
-    {
-        TC_LOG_ERROR("server.loading", "TargetPosRecalculateRange (%f) must be <= %f. Using %f instead.",
-            rate_values[RATE_TARGET_POS_RECALCULATION_RANGE], NOMINAL_MELEE_RANGE, NOMINAL_MELEE_RANGE);
-        rate_values[RATE_TARGET_POS_RECALCULATION_RANGE] = NOMINAL_MELEE_RANGE;
-    }
-
     rate_values[RATE_DURABILITY_LOSS_ON_DEATH]  = sConfigMgr->GetFloatDefault("DurabilityLoss.OnDeath", 10.0f);
     if (rate_values[RATE_DURABILITY_LOSS_ON_DEATH] < 0.0f)
     {
@@ -1680,7 +1667,7 @@ void World::SetInitialWorldSettings()
     sSpellMgr->LoadSpellProcs();
 
     TC_LOG_INFO("server.loading", "Loading Spell Bonus Data...");
-    sSpellMgr->LoadSpellBonusess();
+    sSpellMgr->LoadSpellBonuses();
 
     TC_LOG_INFO("server.loading", "Loading Aggro Spells Definitions...");
     sSpellMgr->LoadSpellThreats();
@@ -1754,6 +1741,9 @@ void World::SetInitialWorldSettings()
     TC_LOG_INFO("server.loading", "Loading Creature Addon Data...");
     sObjectMgr->LoadCreatureAddons();                            // must be after LoadCreatureTemplates() and LoadCreatures()
 
+    TC_LOG_INFO("server.loading", "Loading Creature Movement Overrides...");
+    sObjectMgr->LoadCreatureMovementOverrides();                 // must be after LoadCreatures()
+
     TC_LOG_INFO("server.loading", "Loading Gameobject Data...");
     sObjectMgr->LoadGameObjects();
 
@@ -1761,7 +1751,10 @@ void World::SetInitialWorldSettings()
     sObjectMgr->LoadSpawnGroups();
 
     TC_LOG_INFO("server.loading", "Loading GameObject Addon Data...");
-    sObjectMgr->LoadGameObjectAddons();                          // must be after LoadGameObjectTemplate() and LoadGameObjects()
+    sObjectMgr->LoadGameObjectAddons();                          // must be after LoadGameObjects()
+
+    TC_LOG_INFO("server.loading", "Loading GameObject faction and flags overrides...");
+    sObjectMgr->LoadGameObjectOverrides();                       // must be after LoadGameObjects()
 
     TC_LOG_INFO("server.loading", "Loading GameObject Quest Items...");
     sObjectMgr->LoadGameObjectQuestItems();
@@ -2794,18 +2787,20 @@ BanReturn World::BanCharacter(std::string const& name, std::string const& durati
     }
     else
         guid = banned->GetGUID().GetCounter();
-
+    //Use transaction in order to ensure the order of the queries
+    SQLTransaction trans = CharacterDatabase.BeginTransaction();
     // make sure there is only one active ban
     PreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_UPD_CHARACTER_BAN);
     stmt->setUInt32(0, guid);
-    CharacterDatabase.Execute(stmt);
+    trans->Append(stmt);
 
     stmt = CharacterDatabase.GetPreparedStatement(CHAR_INS_CHARACTER_BAN);
     stmt->setUInt32(0, guid);
     stmt->setUInt32(1, duration_secs);
     stmt->setString(2, author);
     stmt->setString(3, reason);
-    CharacterDatabase.Execute(stmt);
+    trans->Append(stmt);
+    CharacterDatabase.CommitTransaction(trans);
 
     if (banned)
         banned->GetSession()->KickPlayer();

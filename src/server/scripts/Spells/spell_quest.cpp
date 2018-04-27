@@ -996,36 +996,57 @@ class spell_q12805_lifeblood_dummy : public SpellScriptLoader
  */
 enum BattleStandard
 {
-    NPC_KING_OF_THE_MOUNTAINT_KC                    = 31766,
+    NPC_KING_OF_THE_MOUNTAINT_KC         = 31766,
+    SPELL_PLANT_HORDE_BATTLE_STANDARD    = 59643,
+    SPELL_HORDE_BATTLE_STANDARD_STATE    = 59642,
+    SPELL_ALLIANCE_BATTLE_STANDARD_STATE = 4339,
+    SPELL_JUMP_ROCKET_BLAST              = 4340
 };
 
-class spell_q13280_13283_plant_battle_standard: public SpellScriptLoader
+class spell_q13280_13283_plant_battle_standard : public SpellScript
 {
-    public:
-        spell_q13280_13283_plant_battle_standard() : SpellScriptLoader("spell_q13280_13283_plant_battle_standard") { }
+    PrepareSpellScript(spell_q13280_13283_plant_battle_standard);
 
-        class spell_q13280_13283_plant_battle_standard_SpellScript : public SpellScript
-        {
-            PrepareSpellScript(spell_q13280_13283_plant_battle_standard_SpellScript);
+    void HandleDummy(SpellEffIndex /*effIndex*/)
+    {
+        Unit* caster = GetCaster();
+        Unit* target = GetHitUnit();
+        uint32 triggeredSpellID = SPELL_ALLIANCE_BATTLE_STANDARD_STATE;
 
-            void HandleDummy(SpellEffIndex /*effIndex*/)
-            {
-                Unit* caster = GetCaster();
-                if (caster->IsVehicle())
-                    if (Unit* player = caster->GetVehicleKit()->GetPassenger(0))
-                         player->ToPlayer()->KilledMonsterCredit(NPC_KING_OF_THE_MOUNTAINT_KC);
-            }
+        caster->HandleEmoteCommand(EMOTE_ONESHOT_ROAR);
+        if (caster->IsVehicle())
+            if (Unit* player = caster->GetVehicleKit()->GetPassenger(0))
+                player->ToPlayer()->KilledMonsterCredit(NPC_KING_OF_THE_MOUNTAINT_KC);
 
-            void Register() override
-            {
-                OnEffectHit += SpellEffectFn(spell_q13280_13283_plant_battle_standard_SpellScript::HandleDummy, EFFECT_0, SPELL_EFFECT_DUMMY);
-            }
-        };
+        if (GetSpellInfo()->Id == SPELL_PLANT_HORDE_BATTLE_STANDARD)
+            triggeredSpellID = SPELL_HORDE_BATTLE_STANDARD_STATE;
 
-        SpellScript* GetSpellScript() const override
-        {
-            return new spell_q13280_13283_plant_battle_standard_SpellScript();
-        }
+        target->RemoveAllAuras();
+        target->CastSpell(target, triggeredSpellID, true);
+    }
+
+    void Register() override
+    {
+        OnEffectHitTarget += SpellEffectFn(spell_q13280_13283_plant_battle_standard::HandleDummy, EFFECT_0, SPELL_EFFECT_DUMMY);
+    }
+};
+
+class spell_q13280_13283_jump_jets : public SpellScript
+{
+    PrepareSpellScript(spell_q13280_13283_jump_jets);
+
+    void HandleCast()
+    {
+        Unit* caster = GetCaster();
+        if (caster->IsVehicle())
+            if (Unit* rocketBunny = caster->GetVehicleKit()->GetPassenger(1))
+                rocketBunny->CastSpell(rocketBunny, SPELL_JUMP_ROCKET_BLAST, true);
+    }
+
+    void Register() override
+    {
+        OnCast += SpellCastFn(spell_q13280_13283_jump_jets::HandleCast);
+    }
 };
 
 enum ChumTheWaterSummons
@@ -1937,6 +1958,92 @@ class spell_q13086_cannons_target : public SpellScriptLoader
         }
 };
 
+enum ThatsAbominable
+{
+    QUEST_THATS_ABOMINABLE                = 13264,
+
+    NPC_ICY_GHOUL                         = 31142,
+    NPC_RISEN_ALLIANCE_SOLDIERS           = 31205,
+    NPC_VICIOUS_GEIST                     = 31147,
+    NPC_RENIMATED_ABOMINATION             = 31692,
+
+    SPELL_ICY_GHOUL_CREDIT                = 59591, // Credit for Icy Ghoul
+    SPELL_VICIOUS_GEISTS_CREDIT           = 60042, // Credit for Vicious Geists
+    SPELL_RISEN_ALLIANCE_SOLDIERS_CREDIT  = 60040, // Credit for Risen Alliance Soldiers
+};
+
+class spell_q13264_thats_abominable : public SpellScriptLoader
+{
+    public:
+        spell_q13264_thats_abominable() : SpellScriptLoader("spell_q13264_thats_abominable") { }
+
+        class spell_q13264_thats_abominable_SpellScript : public SpellScript
+        {
+            PrepareSpellScript(spell_q13264_thats_abominable_SpellScript);
+
+            bool Validate(SpellInfo const* /*spellInfo*/) override
+            {
+                return ValidateSpellInfo(
+                {
+                    SPELL_ICY_GHOUL_CREDIT,
+                    SPELL_VICIOUS_GEISTS_CREDIT,
+                    SPELL_RISEN_ALLIANCE_SOLDIERS_CREDIT,
+                });
+            }
+
+            void HandleKnockBack(SpellEffIndex effIndex)
+            {
+                PreventHitDefaultEffect(effIndex);
+
+                if (Creature* creature = GetHitCreature())
+                    if (Unit* charmer = GetCaster()->GetCharmerOrOwner())
+                        if (Player* player = charmer->ToPlayer())
+                            if (player->GetQuestStatus(QUEST_THATS_ABOMINABLE) == QUEST_STATUS_INCOMPLETE)
+                                if (GiveCreditIfValid(player, creature))
+                                    creature->KillSelf();
+            }
+
+            bool GiveCreditIfValid(Player* player, Creature* creature)
+            {
+                uint32 entry = creature->GetEntry();
+
+                switch(entry)
+                {
+                    case NPC_ICY_GHOUL:
+                        player->CastSpell(player, SPELL_ICY_GHOUL_CREDIT, true);
+                        return true;
+                    case NPC_VICIOUS_GEIST:
+                        player->CastSpell(player, SPELL_VICIOUS_GEISTS_CREDIT, true);
+                        return true;
+                    case NPC_RISEN_ALLIANCE_SOLDIERS:
+                        player->CastSpell(player, SPELL_RISEN_ALLIANCE_SOLDIERS_CREDIT, true);
+                        return true;
+                }
+
+                return false;
+            }
+
+            void HandleScript(SpellEffIndex /*effIndex*/)
+            {
+                if (Creature* creature = GetCaster()->ToCreature()) {
+                    creature->KillSelf();
+                    creature->DespawnOrUnsummon();
+                }
+            }
+
+            void Register() override
+            {
+                OnEffectHitTarget += SpellEffectFn(spell_q13264_thats_abominable_SpellScript::HandleKnockBack, EFFECT_1, SPELL_EFFECT_KNOCK_BACK);
+                OnEffectHitTarget += SpellEffectFn(spell_q13264_thats_abominable_SpellScript::HandleScript, EFFECT_0, SPELL_EFFECT_SCRIPT_EFFECT);
+            }
+        };
+
+        SpellScript* GetSpellScript() const override
+        {
+            return new spell_q13264_thats_abominable_SpellScript();
+        }
+};
+
 enum BurstAtTheSeams
 {
     NPC_DRAKKARI_CHIEFTAINK                 = 29099,
@@ -2282,7 +2389,7 @@ class spell_q12919_gymers_grab : public SpellScriptLoader
                 if (!GetHitCreature())
                     return;
                 CastSpellExtraArgs args(TRIGGERED_FULL_MASK);
-                args.SpellValueOverrides.AddBP0(2);
+                args.AddSpellBP0(2);
                 GetHitCreature()->CastSpell(GetCaster(), SPELL_RIDE_GYMER, args);
                 GetHitCreature()->CastSpell(GetHitCreature(), SPELL_GRABBED, true);
             }
@@ -2704,7 +2811,8 @@ void AddSC_quest_spell_scripts()
     new spell_q12659_ahunaes_knife();
     new spell_q9874_liquid_fire();
     new spell_q12805_lifeblood_dummy();
-    new spell_q13280_13283_plant_battle_standard();
+    RegisterSpellScript(spell_q13280_13283_plant_battle_standard);
+    RegisterSpellScript(spell_q13280_13283_jump_jets);
     new spell_q14112_14145_chum_the_water();
     new spell_q9452_cast_net();
     new spell_q12279_cast_net();
@@ -2729,6 +2837,7 @@ void AddSC_quest_spell_scripts()
     new spell_q12847_summon_soul_moveto_bunny();
     new spell_q13011_bear_flank_master();
     new spell_q13086_cannons_target();
+    new spell_q13264_thats_abominable();
     new spell_q12690_burst_at_the_seams();
     new spell_q12308_escape_from_silverbrook_summon_worgen();
     new spell_q12308_escape_from_silverbrook();

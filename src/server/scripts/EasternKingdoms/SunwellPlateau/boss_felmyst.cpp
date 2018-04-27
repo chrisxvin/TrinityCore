@@ -217,7 +217,7 @@ public:
                     summon->CastSpell(summon, SPELL_FOG_CHARM, true);
                     summon->CastSpell(summon, SPELL_FOG_CHARM2, true);
                 }
-                me->DealDamage(caster, caster->GetHealth(), nullptr, DIRECT_DAMAGE, SPELL_SCHOOL_MASK_NORMAL, nullptr, false);
+                Unit::DealDamage(me, caster, caster->GetHealth(), nullptr, DIRECT_DAMAGE, SPELL_SCHOOL_MASK_NORMAL, nullptr, false);
             }
         }
 
@@ -361,7 +361,7 @@ public:
                     break;
                 }
                 case 6:
-                    me->SetFacingTo(me->GetAngle(breathX, breathY));
+                    me->SetFacingTo(me->GetAbsoluteAngle(breathX, breathY));
                     //DoTextEmote("takes a deep breath.", nullptr);
                     events.ScheduleEvent(EVENT_FLIGHT_SEQUENCE, 10000);
                     break;

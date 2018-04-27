@@ -26,7 +26,6 @@
  * packets for the players.
  */
 
-#include "DBCStructure.h"
 #include "MovementGenerator.h"
 #include "PathMovementBase.h"
 #include "Timer.h"
@@ -51,7 +50,7 @@ class WaypointMovementGenerator<Creature> : public MovementGeneratorMedium<Creat
         void DoReset(Creature*);
         bool DoUpdate(Creature*, uint32 diff);
 
-        MovementGeneratorType GetMovementGeneratorType() const override { return WAYPOINT_MOTION_TYPE; }
+        MovementGeneratorType GetMovementGeneratorType() const override;
         void UnitSpeedChanged() override { _recalculateSpeed = true; }
         void Pause(uint32 timer = 0) override;
         void Resume(uint32 overrideTimer = 0) override;
@@ -61,15 +60,9 @@ class WaypointMovementGenerator<Creature> : public MovementGeneratorMedium<Creat
         bool GetResetPos(Creature*, float& x, float& y, float& z);
 
     private:
-        void LoadPath(Creature*);
         void OnArrived(Creature*);
-        bool StartMove(Creature*);
-        bool CanMove(Creature*);
-        bool StartMoveNow(Creature* creature)
-        {
-            _nextMoveTime.Reset(0);
-            return StartMove(creature);
-        }
+        void StartMove(Creature*, bool relaunch = false);
+        static bool CanMove(Creature*);
 
         TimeTrackerSmall _nextMoveTime;
         bool _recalculateSpeed;

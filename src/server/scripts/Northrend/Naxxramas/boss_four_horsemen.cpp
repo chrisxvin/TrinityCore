@@ -231,6 +231,7 @@ struct boss_four_horsemen_baseAI : public BossAI
                     cBoss->SetReactState(REACT_PASSIVE);
                     cBoss->AttackStop(); // clear initial target that was set on enter combat
                     cBoss->setActive(true);
+                    cBoss->SetFarVisible(true);
 
                     for (Map::PlayerList::const_iterator it = players.begin(); it != players.end(); ++it)
                     {
@@ -730,7 +731,7 @@ class spell_four_horsemen_mark : public SpellScriptLoader
                     if (damage)
                     {
                         CastSpellExtraArgs args(TRIGGERED_FULL_MASK);
-                        args.SpellValueOverrides.AddBP0(damage);
+                        args.AddSpellBP0(damage);
                         caster->CastSpell(GetTarget(), SPELL_MARK_DAMAGE, args);
                     }
                 }

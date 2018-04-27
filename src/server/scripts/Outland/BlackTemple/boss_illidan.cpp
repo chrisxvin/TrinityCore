@@ -685,7 +685,7 @@ struct boss_illidan_stormrage : public BossAI
         Map::PlayerList const& players = me->GetMap()->GetPlayers();
         for (Map::PlayerList::const_iterator i = players.begin(); i != players.end(); ++i)
             if (Player* player = i->GetSource())
-                if (player->IsAlive() && !player->IsGameMaster() && CheckBoundary(player))
+                if (player->IsAlive() && !player->IsGameMaster() && IsInBoundary(player))
                     return;
 
         EnterEvadeMode(EVADE_REASON_NO_HOSTILES);
@@ -703,8 +703,7 @@ struct boss_illidan_stormrage : public BossAI
 
     void DamageTaken(Unit* who, uint32 &damage) override
     {
-
-        if (damage >= me->GetHealth() && who->GetGUID() != me->GetGUID())
+        if (damage >= me->GetHealth() && (!who || who->GetGUID() != me->GetGUID()))
         {
             damage = me->GetHealth() - 1;
             if (!_dead)
@@ -886,7 +885,7 @@ struct boss_illidan_stormrage : public BossAI
                 }
                 case EVENT_FACE_MIDDLE:
                 {
-                    float angle = me->GetAngle(IllidanMiddlePoint);
+                    float angle = me->GetAbsoluteAngle(IllidanMiddlePoint);
                     me->SetFacingTo(angle);
                     break;
                 }
@@ -1380,7 +1379,7 @@ struct npc_parasitic_shadowfiend : public ScriptedAI
         _scheduler.Schedule(Seconds(2), [this](TaskContext /*context*/)
         {
             me->SetReactState(REACT_AGGRESSIVE);
-            me->SetInCombatWithZone();
+            DoZoneInCombat();
         });
     }
 
@@ -1395,7 +1394,7 @@ struct npc_parasitic_shadowfiend : public ScriptedAI
             _scheduler.Schedule(Seconds(2), [this](TaskContext /*context*/)
             {
                 me->SetReactState(REACT_AGGRESSIVE);
-                me->SetInCombatWithZone();
+                DoZoneInCombat();
             });
     }
 
@@ -1498,7 +1497,7 @@ struct npc_flame_of_azzinoth : public ScriptedAI
             {
                 case EVENT_ENGAGE:
                     me->SetReactState(REACT_AGGRESSIVE);
-                    me->SetInCombatWithZone();
+                    DoZoneInCombat();
                     _events.ScheduleEvent(EVENT_FLAME_CHARGE, Seconds(5));
                     break;
                 case EVENT_FLAME_CHARGE:

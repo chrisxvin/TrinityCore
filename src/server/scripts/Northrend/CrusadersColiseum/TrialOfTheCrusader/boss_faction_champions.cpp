@@ -616,7 +616,7 @@ struct boss_faction_championsAI : public BossAI
 
     void UpdatePower()
     {
-        if (me->getPowerType() == POWER_MANA)
+        if (me->GetPowerType() == POWER_MANA)
             me->ModifyPower(POWER_MANA, me->GetMaxPower(POWER_MANA) / 3);
     }
 
@@ -673,14 +673,10 @@ struct boss_faction_championsAI : public BossAI
 
     Unit* SelectEnemyCaster(bool /*casting*/)
     {
-        std::list<HostileReference*> const& tList = me->GetThreatManager().getThreatList();
-        std::list<HostileReference*>::const_iterator iter;
-        for (iter = tList.begin(); iter!=tList.end(); ++iter)
-        {
-            Unit* target = ObjectAccessor::GetUnit(*me, (*iter)->getUnitGuid());
-            if (target && target->getPowerType() == POWER_MANA)
-                return target;
-        }
+        for (auto const& pair : me->GetCombatManager().GetPvECombatRefs())
+            if (Player* player = pair.second->GetOther(me)->ToPlayer())
+                if (player->GetPowerType() == POWER_MANA)
+                    return player;
         return nullptr;
     }
 
@@ -1824,8 +1820,8 @@ class npc_toc_rogue : public CreatureScript
                 events.ScheduleEvent(EVENT_EVISCERATE, urand(20*IN_MILLISECONDS, 40*IN_MILLISECONDS));
                 events.ScheduleEvent(EVENT_WOUND_POISON, urand(5*IN_MILLISECONDS, 10*IN_MILLISECONDS));
                 SetEquipmentSlots(false, 47422, 49982, EQUIP_NO_CHANGE);
-                me->setPowerType(POWER_ENERGY);
-                me->SetMaxPower(POWER_ENERGY, 100);
+                me->SetPowerType(POWER_ENERGY);
+                me->SetFullPower(POWER_ENERGY);
             }
 
             void UpdateAI(uint32 diff) override

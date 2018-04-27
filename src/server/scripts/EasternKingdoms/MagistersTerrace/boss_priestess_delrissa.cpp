@@ -356,7 +356,6 @@ struct boss_priestess_lackey_commonAI : public ScriptedAI
     {
         Initialize();
         instance = creature->GetInstanceScript();
-        AcquireGUIDs();
     }
 
     void Initialize()
@@ -380,6 +379,7 @@ struct boss_priestess_lackey_commonAI : public ScriptedAI
     void Reset() override
     {
         Initialize();
+        AcquireGUIDs();
 
         // in case she is not alive and Reset was for some reason called, respawn her (most likely party wipe after killing her)
         if (Creature* pDelrissa = ObjectAccessor::GetCreature(*me, instance->GetGuidData(DATA_DELRISSA)))
@@ -855,17 +855,12 @@ public:
             if (Blink_Timer <= diff)
             {
                 bool InMeleeRange = false;
-                ThreatContainer::StorageType const& t_list = me->GetThreatManager().getThreatList();
-                for (ThreatContainer::StorageType::const_iterator itr = t_list.begin(); itr!= t_list.end(); ++itr)
+                for (auto const& pair : me->GetCombatManager().GetPvECombatRefs())
                 {
-                    if (Unit* target = ObjectAccessor::GetUnit(*me, (*itr)->getUnitGuid()))
+                    if (pair.second->GetOther(me)->IsWithinMeleeRange(me))
                     {
-                        //if in melee range
-                        if (target->IsWithinDistInMap(me, 5))
-                        {
-                            InMeleeRange = true;
-                            break;
-                        }
+                        InMeleeRange = true;
+                        break;
                     }
                 }
 
@@ -949,17 +944,12 @@ public:
             if (Intercept_Stun_Timer <= diff)
             {
                 bool InMeleeRange = false;
-                ThreatContainer::StorageType const& t_list = me->GetThreatManager().getThreatList();
-                for (ThreatContainer::StorageType::const_iterator itr = t_list.begin(); itr!= t_list.end(); ++itr)
+                for (auto const& pair : me->GetCombatManager().GetPvECombatRefs())
                 {
-                    if (Unit* target = ObjectAccessor::GetUnit(*me, (*itr)->getUnitGuid()))
+                    if (pair.second->GetOther(me)->IsWithinMeleeRange(me))
                     {
-                        //if in melee range
-                        if (target->IsWithinDistInMap(me, ATTACK_DISTANCE))
-                        {
-                            InMeleeRange = true;
-                            break;
-                        }
+                        InMeleeRange = true;
+                        break;
                     }
                 }
 

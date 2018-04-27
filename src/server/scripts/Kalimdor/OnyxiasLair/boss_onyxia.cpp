@@ -173,7 +173,7 @@ public:
 
         void JustSummoned(Creature* summoned) override
         {
-            summoned->SetInCombatWithZone();
+            DoZoneInCombat(summoned);
             if (Unit* target = SelectTarget(SELECT_TARGET_RANDOM, 0))
                 summoned->AI()->AttackStart(target);
 
@@ -184,6 +184,7 @@ public:
                     break;
                 case NPC_LAIRGUARD:
                     summoned->setActive(true);
+                    summoned->SetFarVisible(true);
                     break;
             }
             summons.Summon(summoned);
@@ -231,7 +232,7 @@ public:
                         me->SetDisableGravity(false);
                         me->RemoveByteFlag(UNIT_FIELD_BYTES_1, UNIT_BYTES_1_OFFSET_ANIM_TIER, UNIT_BYTE1_FLAG_ALWAYS_STAND | UNIT_BYTE1_FLAG_HOVER);
                         if (Creature* trigger = ObjectAccessor::GetCreature(*me, triggerGUID))
-                            me->Kill(trigger);
+                            Unit::Kill(me, trigger);
                         me->SetReactState(REACT_AGGRESSIVE);
                         // tank selection based on phase one. If tank is not there i take nearest one
                         if (Unit* tank = ObjectAccessor::GetUnit(*me, tankGUID))

@@ -265,11 +265,11 @@ struct boss_twin_baseAI : public BossAI
 
     void JustEngagedWith(Unit* /*who*/) override
     {
-        me->SetInCombatWithZone();
+        DoZoneInCombat();
         if (Creature* pSister = GetSister())
         {
             me->AddAura(MyEmphatySpellId, pSister);
-            pSister->SetInCombatWithZone();
+            DoZoneInCombat(pSister);
         }
         instance->SetBossState(DATA_TWIN_VALKIRIES, IN_PROGRESS);
 
@@ -278,10 +278,10 @@ struct boss_twin_baseAI : public BossAI
         me->SetCombatPulseDelay(5);
         me->setActive(true);
 
-        events.ScheduleEvent(EVENT_TWIN_SPIKE, 20 * IN_MILLISECONDS);
-        events.ScheduleEvent(EVENT_BERSERK, IsHeroic() ? 6 * MINUTE*IN_MILLISECONDS : 10 * MINUTE*IN_MILLISECONDS);
+        events.ScheduleEvent(EVENT_TWIN_SPIKE, 20s);
+        events.ScheduleEvent(EVENT_BERSERK, IsHeroic() ? 6min : 8min);
         if (IsHeroic())
-            events.ScheduleEvent(EVENT_TOUCH, urand(10 * IN_MILLISECONDS, 15 * IN_MILLISECONDS));
+            events.ScheduleEvent(EVENT_TOUCH, 10s, 15s);
     }
 
     void DoAction(int32 action) override
@@ -317,16 +317,16 @@ struct boss_twin_baseAI : public BossAI
         {
             case EVENT_TWIN_SPIKE:
                 DoCastVictim(SpikeSpellId);
-                events.ScheduleEvent(EVENT_TWIN_SPIKE, 20 * IN_MILLISECONDS);
+                events.Repeat(20s);
                 break;
             case EVENT_TOUCH:
                 if (Unit* target = SelectTarget(SELECT_TARGET_RANDOM, 0, 200.0f, true, true, OtherEssenceSpellId))
                 {
                     CastSpellExtraArgs args;
-                    args.SpellValueOverrides.AddMod(SPELLVALUE_MAX_TARGETS, 1); // @todo spellmgr correction instead?
+                    args.AddSpellMod(SPELLVALUE_MAX_TARGETS, 1); // @todo spellmgr correction instead?
                     me->CastSpell(target, TouchSpellId, args);
                 }
-                events.ScheduleEvent(EVENT_TOUCH, urand(10 * IN_MILLISECONDS, 15 * IN_MILLISECONDS));
+                events.Repeat(10s, 15s);
                 break;
             case EVENT_BERSERK:
                 DoCast(me, SPELL_BERSERK);
@@ -433,7 +433,7 @@ class boss_fjola : public CreatureScript
                             break;
                     }
                     ++CurrentStage;
-                    events.ScheduleEvent(EVENT_SPECIAL_ABILITY, 45 * IN_MILLISECONDS);
+                    events.ScheduleEvent(EVENT_SPECIAL_ABILITY, 45s);
                 }
                 else
                     boss_twin_baseAI::ExecuteEvent(eventId);
@@ -442,7 +442,7 @@ class boss_fjola : public CreatureScript
             void JustEngagedWith(Unit* who) override
             {
                 instance->DoStartTimedAchievement(ACHIEVEMENT_TIMED_TYPE_EVENT,  EVENT_START_TWINS_FIGHT);
-                events.ScheduleEvent(EVENT_SPECIAL_ABILITY, 45 * IN_MILLISECONDS);
+                events.ScheduleEvent(EVENT_SPECIAL_ABILITY, 45s);
                 me->SummonCreature(NPC_BULLET_CONTROLLER, ToCCommonLoc[1].GetPositionX(), ToCCommonLoc[1].GetPositionY(), ToCCommonLoc[1].GetPositionZ(), 0.0f, TEMPSUMMON_MANUAL_DESPAWN);
                 boss_twin_baseAI::JustEngagedWith(who);
             }
@@ -570,7 +570,7 @@ struct npc_unleashed_ballAI : public ScriptedAI
 
     void Initialize()
     {
-        RangeCheckTimer = 0.5*IN_MILLISECONDS;
+        RangeCheckTimer = 500;
     }
 
     void MoveToNextPoint()
@@ -637,9 +637,9 @@ class npc_unleashed_dark : public CreatureScript
                     {
                         DoCastAOE(SPELL_UNLEASHED_DARK_HELPER);
                         me->GetMotionMaster()->MoveIdle();
-                        me->DespawnOrUnsummon(1*IN_MILLISECONDS);
+                        me->DespawnOrUnsummon(1s);
                     }
-                    RangeCheckTimer = 0.5*IN_MILLISECONDS;
+                    RangeCheckTimer = 500;
                 }
                 else
                     RangeCheckTimer -= diff;
@@ -669,9 +669,9 @@ class npc_unleashed_light : public CreatureScript
                     {
                         DoCastAOE(SPELL_UNLEASHED_LIGHT_HELPER);
                         me->GetMotionMaster()->MoveIdle();
-                        me->DespawnOrUnsummon(1 * IN_MILLISECONDS);
+                        me->DespawnOrUnsummon(1s);
                     }
-                    RangeCheckTimer = IN_MILLISECONDS / 2;
+                    RangeCheckTimer = 500;
                 }
                 else
                     RangeCheckTimer -= diff;
@@ -731,8 +731,8 @@ class spell_bullet_controller : public AuraScript
             return;
 
         CastSpellExtraArgs args1(TRIGGERED_FULL_MASK), args2(TRIGGERED_FULL_MASK);
-        args1.SpellValueOverrides.AddMod(SPELLVALUE_MAX_TARGETS, urand(1, 6));
-        args2.SpellValueOverrides.AddMod(SPELLVALUE_MAX_TARGETS, urand(1, 6));
+        args1.AddSpellMod(SPELLVALUE_MAX_TARGETS, urand(1, 6));
+        args2.AddSpellMod(SPELLVALUE_MAX_TARGETS, urand(1, 6));
         caster->CastSpell(GetTarget(), SPELL_SUMMON_PERIODIC_LIGHT, args1);
         caster->CastSpell(GetTarget(), SPELL_SUMMON_PERIODIC_DARK, args2);
     }

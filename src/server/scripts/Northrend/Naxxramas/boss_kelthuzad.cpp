@@ -201,7 +201,7 @@ struct ManaUserTargetSelector : public std::unary_function<Unit*, bool>
 {
     bool operator()(Unit const* target) const
     {
-        return target->GetTypeId() == TYPEID_PLAYER && target->getPowerType() == POWER_MANA;
+        return target->GetTypeId() == TYPEID_PLAYER && target->GetPowerType() == POWER_MANA;
     }
 };
 
@@ -929,7 +929,7 @@ public:
             {
                 mana = target->ModifyPower(POWER_MANA, -mana);
                 CastSpellExtraArgs args(aurEff);
-                args.SpellValueOverrides.AddBP0(-mana * 10);
+                args.AddSpellBP0(-mana * 10);
                 target->CastSpell(target, SPELL_MANA_DETONATION_DAMAGE, args);
             }
         }
@@ -964,7 +964,7 @@ class spell_kelthuzad_frost_blast : public AuraScript
         if (Unit* caster = GetCaster())
         {
             CastSpellExtraArgs args(aurEff);
-            args.SpellValueOverrides.AddBP0(GetTarget()->CountPctFromMaxHealth(26));
+            args.AddSpellBP0(GetTarget()->CountPctFromMaxHealth(26));
             caster->CastSpell(GetTarget(), SPELL_FROST_BLAST_DMG, args);
         }
     }

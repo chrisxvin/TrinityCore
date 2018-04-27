@@ -20,18 +20,23 @@
 #include "ArenaTeamMgr.h"
 #include "CellImpl.h"
 #include "CharacterCache.h"
+#include "ChaseMovementGenerator.h"
 #include "Chat.h"
 #include "DatabaseEnv.h"
 #include "DisableMgr.h"
+#include "FollowMovementGenerator.h"
 #include "GridNotifiers.h"
 #include "Group.h"
 #include "GroupMgr.h"
 #include "InstanceSaveMgr.h"
+#include "IpAddress.h"
 #include "Item.h"
 #include "Language.h"
 #include "LFG.h"
 #include "Log.h"
 #include "MMapFactory.h"
+#include "MotionMaster.h"
+#include "MovementDefines.h"
 #include "MovementGenerator.h"
 #include "ObjectAccessor.h"
 #include "ObjectMgr.h"
@@ -42,13 +47,11 @@
 #include "SpellAuras.h"
 #include "SpellHistory.h"
 #include "SpellMgr.h"
-#include "TargetedMovementGenerator.h"
 #include "Transport.h"
 #include "Weather.h"
 #include "WeatherMgr.h"
 #include "World.h"
 #include "WorldSession.h"
-#include <boost/asio/ip/address_v4.hpp>
 
 // temporary hack until includes are sorted out (don't want to pull in Windows.h)
 #ifdef GetClassName
@@ -269,7 +272,7 @@ public:
 
         if (haveVMap)
         {
-            if (map->IsOutdoors(object->GetPositionX(), object->GetPositionY(), object->GetPositionZ()))
+            if (object->IsOutdoors())
                 handler->PSendSysMessage(LANG_GPS_POSITION_OUTDOORS);
             else
                 handler->PSendSysMessage(LANG_GPS_POSITION_INDOORS);
@@ -315,7 +318,12 @@ public:
         uint32 spellId = handler->extractSpellIdFromLink((char*)args);
 
         if (SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(spellId))
-            Aura::TryRefreshStackOrCreate(spellInfo, MAX_EFFECT_MASK, target, target);
+        {
+            AuraCreateInfo createInfo(spellInfo, MAX_EFFECT_MASK, target);
+            createInfo.SetCaster(target);
+
+            Aura::TryRefreshStackOrCreate(createInfo);
+        }
 
         return true;
     }
@@ -453,7 +461,7 @@ public:
             float x, y, z;
             target->GetContactPoint(_player, x, y, z);
 
-            _player->TeleportTo(target->GetMapId(), x, y, z, _player->GetAngle(target), TELE_TO_GM_MODE);
+            _player->TeleportTo(target->GetMapId(), x, y, z, _player->GetAbsoluteAngle(target), TELE_TO_GM_MODE);
             _player->SetPhaseMask(target->GetPhaseMask(), true);
         }
         else
@@ -634,9 +642,9 @@ public:
         if (target->IsAlive())
         {
             if (sWorld->getBoolConfig(CONFIG_DIE_COMMAND_MODE))
-                handler->GetSession()->GetPlayer()->Kill(target);
+                Unit::Kill(handler->GetSession()->GetPlayer(), target);
             else
-                handler->GetSession()->GetPlayer()->DealDamage(target, target->GetHealth(), nullptr, DIRECT_DAMAGE, SPELL_SCHOOL_MASK_NORMAL, nullptr, false);
+                Unit::DealDamage(handler->GetSession()->GetPlayer(), target, target->GetHealth(), nullptr, DIRECT_DAMAGE, SPELL_SCHOOL_MASK_NORMAL, nullptr, false);
         }
 
         return true;
@@ -1342,31 +1350,31 @@ public:
         TC_LOG_DEBUG("misc", handler->GetTrinityString(LANG_ADDITEMSET), itemSetId);
 
         bool found = false;
-        ItemTemplateContainer const* its = sObjectMgr->GetItemTemplateStore();
-        for (ItemTemplateContainer::const_iterator itr = its->begin(); itr != its->end(); ++itr)
+        ItemTemplateContainer const& its = sObjectMgr->GetItemTemplateStore();
+        for (auto const& itemTemplatePair : its)
         {
-            if (itr->second.ItemSet == itemSetId)
+            if (itemTemplatePair.second.ItemSet != itemSetId)
+                continue;
+
+            found = true;
+            ItemPosCountVec dest;
+            InventoryResult msg = playerTarget->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, itemTemplatePair.first, 1);
+            if (msg == EQUIP_ERR_OK)
             {
-                found = true;
-                ItemPosCountVec dest;
-                InventoryResult msg = playerTarget->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, itr->second.ItemId, 1);
-                if (msg == EQUIP_ERR_OK)
-                {
-                    Item* item = playerTarget->StoreNewItem(dest, itr->second.ItemId, true);
+                Item* item = playerTarget->StoreNewItem(dest, itemTemplatePair.first, true);
 
-                    // remove binding (let GM give it to another player later)
-                    if (player == playerTarget)
-                        item->SetBinding(false);
+                // remove binding (let GM give it to another player later)
+                if (player == playerTarget)
+                    item->SetBinding(false);
 
-                    player->SendNewItem(item, 1, false, true);
-                    if (player != playerTarget)
-                        playerTarget->SendNewItem(item, 1, true, false);
-                }
-                else
-                {
-                    player->SendEquipError(msg, nullptr, nullptr, itr->second.ItemId);
-                    handler->PSendSysMessage(LANG_ITEM_CANNOT_CREATE, itr->second.ItemId, 1);
-                }
+                player->SendNewItem(item, 1, false, true);
+                if (player != playerTarget)
+                    playerTarget->SendNewItem(item, 1, true, false);
+            }
+            else
+            {
+                player->SendEquipError(msg, nullptr, nullptr, itemTemplatePair.first);
+                handler->PSendSysMessage(LANG_ITEM_CANNOT_CREATE, itemTemplatePair.first, 1);
             }
         }
 
@@ -1700,7 +1708,7 @@ public:
                 lastIp    = fields[4].GetString();
                 lastLogin = fields[5].GetString();
 
-                uint32 ip = boost::asio::ip::address_v4::from_string(lastIp).to_ulong();
+                uint32 ip = Trinity::Net::address_to_uint(Trinity::Net::make_address_v4(lastIp));
                 EndianConvertReverse(ip);
 
                 // If ip2nation table is populated, it displays the country
@@ -1916,14 +1924,14 @@ public:
         Cell::VisitGridObjects(player, worker, player->GetGridActivationRange());
 
         // Now handle any that had despawned, but had respawn time logged.
-        RespawnVector data;
+        std::vector<RespawnInfo*> data;
         player->GetMap()->GetRespawnInfo(data, SPAWN_TYPEMASK_ALL, 0);
         if (!data.empty())
         {
             uint32 const gridId = Trinity::ComputeGridCoord(player->GetPositionX(), player->GetPositionY()).GetId();
             for (RespawnInfo* info : data)
                 if (info->gridId == gridId)
-                    player->GetMap()->RemoveRespawnTime(info, true);
+                    player->GetMap()->ForceRespawn(info->type, info->spawnId);
         }
 
         return true;
@@ -2159,11 +2167,7 @@ public:
                     break;
                 case CHASE_MOTION_TYPE:
                 {
-                    Unit* target = nullptr;
-                    if (unit->GetTypeId() == TYPEID_PLAYER)
-                        target = static_cast<ChaseMovementGenerator<Player> const*>(movementGenerator)->GetTarget();
-                    else
-                        target = static_cast<ChaseMovementGenerator<Creature> const*>(movementGenerator)->GetTarget();
+                    Unit* target = static_cast<ChaseMovementGenerator const*>(movementGenerator)->GetTarget();
 
                     if (!target)
                         handler->SendSysMessage(LANG_MOVEGENS_CHASE_NULL);
@@ -2175,11 +2179,7 @@ public:
                 }
                 case FOLLOW_MOTION_TYPE:
                 {
-                    Unit* target = nullptr;
-                    if (unit->GetTypeId() == TYPEID_PLAYER)
-                        target = static_cast<FollowMovementGenerator<Player> const*>(movementGenerator)->GetTarget();
-                    else
-                        target = static_cast<FollowMovementGenerator<Creature> const*>(movementGenerator)->GetTarget();
+                    Unit* target = static_cast<FollowMovementGenerator const*>(movementGenerator)->GetTarget();
 
                     if (!target)
                         handler->SendSysMessage(LANG_MOVEGENS_FOLLOW_NULL);
@@ -2334,9 +2334,9 @@ public:
         // flat melee damage without resistence/etc reduction
         if (!schoolStr)
         {
-            handler->GetSession()->GetPlayer()->DealDamage(target, damage, nullptr, DIRECT_DAMAGE, SPELL_SCHOOL_MASK_NORMAL, nullptr, false);
+            Unit::DealDamage(handler->GetSession()->GetPlayer(), target, damage, nullptr, DIRECT_DAMAGE, SPELL_SCHOOL_MASK_NORMAL, nullptr, false);
             if (target != handler->GetSession()->GetPlayer())
-                handler->GetSession()->GetPlayer()->SendAttackStateUpdate (HITINFO_AFFECTS_VICTIM, target, 1, SPELL_SCHOOL_MASK_NORMAL, damage, 0, 0, VICTIMSTATE_HIT, 0);
+                handler->GetSession()->GetPlayer()->SendAttackStateUpdate(HITINFO_AFFECTS_VICTIM, target, 1, SPELL_SCHOOL_MASK_NORMAL, damage, 0, 0, VICTIMSTATE_HIT, 0);
             return true;
         }
 
@@ -2347,7 +2347,7 @@ public:
         SpellSchoolMask schoolmask = SpellSchoolMask(1 << school);
 
         if (Unit::IsDamageReducedByArmor(schoolmask))
-            damage = handler->GetSession()->GetPlayer()->CalcArmorReducedDamage(target, damage, nullptr, BASE_ATTACK);
+            damage = Unit::CalcArmorReducedDamage(handler->GetSession()->GetPlayer(), target, damage, nullptr, BASE_ATTACK);
 
         char* spellStr = strtok((char*)nullptr, " ");
 
@@ -2356,7 +2356,7 @@ public:
         {
             Player* attacker = handler->GetSession()->GetPlayer();
             DamageInfo dmgInfo(attacker, target, damage, nullptr, schoolmask, SPELL_DIRECT_DAMAGE, BASE_ATTACK);
-            attacker->CalcAbsorbResist(dmgInfo);
+            Unit::CalcAbsorbResist(dmgInfo);
 
             if (!dmgInfo.GetDamage())
                 return true;
@@ -2365,8 +2365,8 @@ public:
 
             uint32 absorb = dmgInfo.GetAbsorb();
             uint32 resist = dmgInfo.GetResist();
-            attacker->DealDamageMods(target, damage, &absorb);
-            attacker->DealDamage(target, damage, nullptr, DIRECT_DAMAGE, schoolmask, nullptr, false);
+            Unit::DealDamageMods(target, damage, &absorb);
+            Unit::DealDamage(attacker, target, damage, nullptr, DIRECT_DAMAGE, schoolmask, nullptr, false);
             attacker->SendAttackStateUpdate(HITINFO_AFFECTS_VICTIM, target, 0, schoolmask, damage, absorb, resist, VICTIMSTATE_HIT, 0);
             return true;
         }
@@ -2384,11 +2384,7 @@ public:
 
         Player* attacker = handler->GetSession()->GetPlayer();
         SpellNonMeleeDamage dmgInfo(attacker, target, spellid, spellInfo->GetSchoolMask());
-        damage = attacker->SpellDamageBonusDone(target, spellInfo, damage, SPELL_DIRECT_DAMAGE);
-        damage = target->SpellDamageBonusTaken(attacker, spellInfo, damage, SPELL_DIRECT_DAMAGE);
-
-        attacker->CalculateSpellDamageTaken(&dmgInfo, damage, spellInfo);
-        attacker->DealDamageMods(dmgInfo.target, dmgInfo.damage, &dmgInfo.absorb);
+        Unit::DealDamageMods(dmgInfo.target, dmgInfo.damage, &dmgInfo.absorb);
         attacker->SendSpellNonMeleeDamageLog(&dmgInfo);
         attacker->DealSpellDamage(&dmgInfo, true);
         return true;
@@ -2420,7 +2416,6 @@ public:
             return false;
 
         target->CombatStop();
-        target->getHostileRefManager().deleteReferences();
         return true;
     }
 

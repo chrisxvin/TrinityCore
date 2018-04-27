@@ -1077,6 +1077,7 @@ class boss_the_lich_king : public CreatureScript
                                     triggers.sort(Trinity::ObjectDistanceOrderPred(terenas, true));
                                     Creature* spawner = triggers.front();
                                     spawner->setActive(true);
+                                    spawner->SetFarVisible(true);
                                     spawner->CastSpell(spawner, SPELL_SUMMON_SPIRIT_BOMB_1, true);  // summons bombs randomly
                                     spawner->CastSpell(spawner, SPELL_SUMMON_SPIRIT_BOMB_2, true);  // summons bombs on players
                                     spawner->m_Events.AddEvent(new TriggerWickedSpirit(spawner), spawner->m_Events.CalculateTime(3000));
@@ -1519,10 +1520,8 @@ class npc_valkyr_shadowguard : public CreatureScript
 
             void ScheduleHeroicEvents()
             {
-                DoZoneInCombat();
                 _events.Reset();
                 _events.ScheduleEvent(EVENT_MOVE_TO_CENTER, 1);
-                _events.ScheduleEvent(EVENT_LIFE_SIPHON, 2000);
                 me->ClearUnitState(UNIT_STATE_EVADE);
             }
 
@@ -1560,11 +1559,14 @@ class npc_valkyr_shadowguard : public CreatureScript
                                 DoCast(target, SPELL_VALKYR_CARRY);
                                 _dropPoint.Relocate(triggers.front());
                                 _events.ScheduleEvent(EVENT_MOVE_TO_DROP_POS, 1500);
-
                             }
                         }
                         else
                             me->DespawnOrUnsummon();
+                        break;
+                    case POINT_SIPHON:
+                        DoZoneInCombat();
+                        _events.ScheduleEvent(EVENT_LIFE_SIPHON, 2000);
                         break;
                     default:
                         break;
@@ -1713,7 +1715,7 @@ class npc_strangulate_vehicle : public CreatureScript
                             {
                                 if (me->GetExactDist(lichKing) > 10.0f)
                                 {
-                                    Position pos = lichKing->GetNearPosition(float(rand_norm()) * 5.0f  + 7.5f, lichKing->GetAngle(me));
+                                    Position pos = lichKing->GetNearPosition(float(rand_norm()) * 5.0f  + 7.5f, lichKing->GetAbsoluteAngle(me));
                                     me->GetMotionMaster()->MovePoint(0, pos);
                                 }
                             }
@@ -1763,6 +1765,7 @@ class npc_terenas_menethil : public CreatureScript
                 {
                     case ACTION_FROSTMOURNE_INTRO:
                         me->setActive(true);
+                        me->SetFarVisible(false);
                         if (!IsHeroic())
                             me->SetHealth(me->GetMaxHealth() / 2);
                         DoCast(me, SPELL_LIGHTS_FAVOR);
@@ -2141,7 +2144,7 @@ class spell_the_lich_king_necrotic_plague : public SpellScriptLoader
                 }
 
                 CastSpellExtraArgs args(GetCasterGUID());
-                args.SpellValueOverrides.AddMod(SPELLVALUE_MAX_TARGETS, 1);
+                args.AddSpellMod(SPELLVALUE_MAX_TARGETS, 1);
                 GetTarget()->CastSpell(nullptr, SPELL_NECROTIC_PLAGUE_JUMP, args);
                 if (Unit* caster = GetCaster())
                     caster->CastSpell(caster, SPELL_PLAGUE_SIPHON, true);
@@ -2237,7 +2240,7 @@ class spell_the_lich_king_necrotic_plague_jump : public SpellScriptLoader
                 }
 
                 CastSpellExtraArgs args(GetCasterGUID());
-                args.SpellValueOverrides.AddMod(SPELLVALUE_AURA_STACK, GetStackAmount());
+                args.AddSpellMod(SPELLVALUE_AURA_STACK, GetStackAmount());
                 GetTarget()->CastSpell(nullptr, SPELL_NECROTIC_PLAGUE_JUMP, args);
                 if (Unit* caster = GetCaster())
                     caster->CastSpell(caster, SPELL_PLAGUE_SIPHON, true);
@@ -2255,8 +2258,8 @@ class spell_the_lich_king_necrotic_plague_jump : public SpellScriptLoader
                     return;
 
                 CastSpellExtraArgs args(GetCasterGUID());
-                args.SpellValueOverrides.AddMod(SPELLVALUE_AURA_STACK, GetStackAmount());
-                args.SpellValueOverrides.AddMod(SPELLVALUE_BASE_POINT1, AURA_REMOVE_BY_ENEMY_SPELL); // add as marker (spell has no effect 1)
+                args.AddSpellMod(SPELLVALUE_AURA_STACK, GetStackAmount());
+                args.AddSpellMod(SPELLVALUE_BASE_POINT1, AURA_REMOVE_BY_ENEMY_SPELL); // add as marker (spell has no effect 1)
                 GetTarget()->CastSpell(nullptr, SPELL_NECROTIC_PLAGUE_JUMP, args);
                 if (Unit* caster = GetCaster())
                     caster->CastSpell(caster, SPELL_PLAGUE_SIPHON, true);
@@ -2671,7 +2674,7 @@ class spell_the_lich_king_life_siphon : public SpellScriptLoader
             void TriggerHeal()
             {
                 CastSpellExtraArgs args(TRIGGERED_FULL_MASK);
-                args.SpellValueOverrides.AddBP0(GetHitDamage() * 10);
+                args.AddSpellBP0(GetHitDamage() * 10);
                 GetHitUnit()->CastSpell(GetCaster(), SPELL_LIFE_SIPHON_HEAL, args);
             }
 
@@ -2939,7 +2942,7 @@ class spell_the_lich_king_soul_rip : public SpellScriptLoader
                 {
                     CastSpellExtraArgs args(aurEff);
                     args.OriginalCaster = GetCasterGUID();
-                    args.SpellValueOverrides.AddBP0(5000 * aurEff->GetTickNumber());
+                    args.AddSpellBP0(5000 * aurEff->GetTickNumber());
                     caster->CastSpell(GetTarget(), SPELL_SOUL_RIP_DAMAGE, args);
                 }
             }
@@ -3038,7 +3041,7 @@ class spell_the_lich_king_dark_hunger : public SpellScriptLoader
                     return;
 
                 CastSpellExtraArgs args(aurEff);
-                args.SpellValueOverrides.AddBP0(damageInfo->GetDamage() / 2);
+                args.AddSpellBP0(damageInfo->GetDamage() / 2);
                 GetTarget()->CastSpell(GetTarget(), SPELL_DARK_HUNGER_HEAL, args);
             }
 

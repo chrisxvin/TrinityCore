@@ -283,6 +283,7 @@ class boss_sindragosa : public CreatureScript
                 instance->SetBossState(DATA_SINDRAGOSA, IN_PROGRESS);
                 me->SetCombatPulseDelay(5);
                 me->setActive(true);
+                me->SetFarVisible(true);
                 DoZoneInCombat();
             }
 
@@ -320,6 +321,7 @@ class boss_sindragosa : public CreatureScript
                         return;
 
                     me->setActive(true);
+                    me->SetFarVisible(true);
                     me->SetCanFly(true);
                     me->SetDisableGravity(true);
                     me->SetByteFlag(UNIT_FIELD_BYTES_1, UNIT_BYTES_1_OFFSET_ANIM_TIER, UNIT_BYTE1_FLAG_ALWAYS_STAND | UNIT_BYTE1_FLAG_HOVER);
@@ -354,6 +356,7 @@ class boss_sindragosa : public CreatureScript
                 {
                     case POINT_FROSTWYRM_LAND:
                         me->setActive(false);
+                        me->SetFarVisible(false);
                         me->SetCanFly(false);
                         me->SetDisableGravity(false);
                         me->RemoveByteFlag(UNIT_FIELD_BYTES_1, UNIT_BYTES_1_OFFSET_ANIM_TIER, UNIT_BYTE1_FLAG_ALWAYS_STAND | UNIT_BYTE1_FLAG_HOVER);
@@ -370,7 +373,7 @@ class boss_sindragosa : public CreatureScript
                     case POINT_AIR_PHASE:
                     {
                         CastSpellExtraArgs args(TRIGGERED_FULL_MASK);
-                        args.SpellValueOverrides.AddMod(SPELLVALUE_MAX_TARGETS, RAID_MODE<int32>(2, 5, 2, 6));
+                        args.AddSpellMod(SPELLVALUE_MAX_TARGETS, RAID_MODE<int32>(2, 5, 2, 6));
                         me->CastSpell(nullptr, SPELL_ICE_TOMB_TARGET, args);
                         me->SetFacingTo(float(M_PI), true);
                         events.ScheduleEvent(EVENT_AIR_MOVEMENT_FAR, 1);
@@ -513,7 +516,7 @@ class boss_sindragosa : public CreatureScript
                         case EVENT_ICE_TOMB:
                         {
                             CastSpellExtraArgs args(TRIGGERED_FULL_MASK);
-                            args.SpellValueOverrides.AddMod(SPELLVALUE_MAX_TARGETS, 1);
+                            args.AddSpellMod(SPELLVALUE_MAX_TARGETS, 1);
                             me->CastSpell(nullptr, SPELL_ICE_TOMB_TARGET, args);
                             events.ScheduleEvent(EVENT_ICE_TOMB, urand(16000, 23000));
                             break;
@@ -716,6 +719,7 @@ class npc_spinestalker : public CreatureScript
                         return;
 
                     me->setActive(true);
+                    me->SetFarVisible(true);
                     me->SetSpeedRate(MOVE_FLIGHT, 2.0f);
                     me->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE);
                     float moveTime = me->GetExactDist(&SpinestalkerFlyPos) / (me->GetSpeed(MOVE_FLIGHT) * 0.001f);
@@ -734,6 +738,7 @@ class npc_spinestalker : public CreatureScript
                     return;
 
                 me->setActive(false);
+                me->SetFarVisible(false);
                 me->SetCanFly(false);
                 me->SetDisableGravity(false);
                 me->RemoveByteFlag(UNIT_FIELD_BYTES_1, UNIT_BYTES_1_OFFSET_ANIM_TIER, UNIT_BYTE1_FLAG_ALWAYS_STAND | UNIT_BYTE1_FLAG_HOVER);
@@ -853,6 +858,7 @@ class npc_rimefang : public CreatureScript
                         return;
 
                     me->setActive(true);
+                    me->SetFarVisible(true);
                     me->SetSpeedRate(MOVE_FLIGHT, 2.0f);
                     me->SetImmuneToPC(true);
                     float moveTime = me->GetExactDist(&RimefangFlyPos) / (me->GetSpeed(MOVE_FLIGHT) * 0.001f);
@@ -871,6 +877,7 @@ class npc_rimefang : public CreatureScript
                     return;
 
                 me->setActive(false);
+                me->SetFarVisible(false);
                 me->SetCanFly(false);
                 me->SetDisableGravity(false);
                 me->RemoveByteFlag(UNIT_FIELD_BYTES_1, UNIT_BYTES_1_OFFSET_ANIM_TIER, UNIT_BYTE1_FLAG_ALWAYS_STAND | UNIT_BYTE1_FLAG_HOVER);
@@ -1154,7 +1161,7 @@ class UnchainedMagicTargetSelector
         bool operator()(WorldObject* object) const
         {
             if (Unit* unit = object->ToUnit())
-                return unit->getPowerType() != POWER_MANA;
+                return unit->GetPowerType() != POWER_MANA;
             return true;
         }
 };
@@ -1253,7 +1260,7 @@ class spell_sindragosa_instability : public SpellScriptLoader
                 {
                     CastSpellExtraArgs args(aurEff);
                     args.OriginalCaster = GetCasterGUID();
-                    args.SpellValueOverrides.AddBP0(aurEff->GetAmount());
+                    args.AddSpellBP0(aurEff->GetAmount());
                     GetTarget()->CastSpell(GetTarget(), SPELL_BACKLASH, args);
                 }
             }
@@ -1626,12 +1633,12 @@ public:
     }
 };
 
-class at_sindragosa_lair : public OnlyOnceAreaTriggerScript
+class at_sindragosa_lair : public AreaTriggerScript
 {
     public:
-        at_sindragosa_lair() : OnlyOnceAreaTriggerScript("at_sindragosa_lair") { }
+        at_sindragosa_lair() : AreaTriggerScript("at_sindragosa_lair") { }
 
-        bool _OnTrigger(Player* player, AreaTriggerEntry const* /*areaTrigger*/) override
+        bool OnTrigger(Player* player, AreaTriggerEntry const* /*areaTrigger*/) override
         {
             if (InstanceScript* instance = player->GetInstanceScript())
             {

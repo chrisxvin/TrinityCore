@@ -586,19 +586,7 @@ bool Player::Create(ObjectGuid::LowType guidlow, CharacterCreateInfo* createInfo
     // apply original stats mods before spell loading or item equipment that call before equip _RemoveStatsMods()
     UpdateMaxHealth();                                      // Update max Health (for add bonus from stamina)
     SetFullHealth();
-    if (getPowerType() == POWER_MANA)
-    {
-        UpdateMaxPower(POWER_MANA);                         // Update max Mana (for add bonus from intellect)
-        SetPower(POWER_MANA, GetMaxPower(POWER_MANA));
-    }
-
-    if (getPowerType() == POWER_RUNIC_POWER)
-    {
-        SetPower(POWER_RUNE, 8);
-        SetMaxPower(POWER_RUNE, 8);
-        SetPower(POWER_RUNIC_POWER, 0);
-        SetMaxPower(POWER_RUNIC_POWER, 1000);
-    }
+    SetFullPower(POWER_MANA);
 
     // original spells
     LearnDefaultSkills();
@@ -682,6 +670,8 @@ bool Player::Create(ObjectGuid::LowType guidlow, CharacterCreateInfo* createInfo
         }
     }
     // all item positions resolved
+
+    GetThreatManager().Initialize();
 
     return true;
 }
@@ -769,7 +759,7 @@ uint32 Player::EnvironmentalDamage(EnviromentalDamage type, uint32 damage)
         case DAMAGE_SLIME:
         {
             DamageInfo dmgInfo(this, this, damage, nullptr, type == DAMAGE_LAVA ? SPELL_SCHOOL_MASK_FIRE : SPELL_SCHOOL_MASK_NATURE, DIRECT_DAMAGE, BASE_ATTACK);
-            CalcAbsorbResist(dmgInfo);
+            Unit::CalcAbsorbResist(dmgInfo);
             absorb = dmgInfo.GetAbsorb();
             resist = dmgInfo.GetResist();
             damage = dmgInfo.GetDamage();
@@ -779,7 +769,7 @@ uint32 Player::EnvironmentalDamage(EnviromentalDamage type, uint32 damage)
             break;
     }
 
-    DealDamageMods(this, damage, &absorb);
+    Unit::DealDamageMods(this, damage, &absorb);
 
     WorldPacket data(SMSG_ENVIRONMENTALDAMAGELOG, (21));
     data << uint64(GetGUID());
@@ -789,7 +779,7 @@ uint32 Player::EnvironmentalDamage(EnviromentalDamage type, uint32 damage)
     data << uint32(resist);
     SendMessageToSet(&data, true);
 
-    uint32 final_damage = DealDamage(this, damage, nullptr, SELF_DAMAGE, SPELL_SCHOOL_MASK_NORMAL, nullptr, false);
+    uint32 final_damage = Unit::DealDamage(this, this, damage, nullptr, SELF_DAMAGE, SPELL_SCHOOL_MASK_NORMAL, nullptr, false);
 
     if (!IsAlive())
     {
@@ -1371,7 +1361,7 @@ void Player::Update(uint32 p_time)
         {
             m_hostileReferenceCheckTimer = 15 * IN_MILLISECONDS;
             if (!GetMap()->IsDungeon())
-                getHostileRefManager().deleteReferencesOutOfRange(GetVisibilityRange());
+                GetCombatManager().EndCombatBeyondRange(GetVisibilityRange(), true);
         }
         else
             m_hostileReferenceCheckTimer -= p_time;
@@ -1792,7 +1782,7 @@ bool Player::TeleportTo(uint32 mapid, float x, float y, float z, float orientati
             }
 
             // remove arena spell coldowns/buffs now to also remove pet's cooldowns before it's temporarily unsummoned
-            if (mEntry->IsBattleArena())
+            if (mEntry->IsBattleArena() && !IsGameMaster())
             {
                 RemoveArenaSpellCooldowns(true);
                 RemoveArenaAuras();
@@ -1983,7 +1973,7 @@ void Player::SetObjectScale(float scale)
     SetFloatValue(UNIT_FIELD_COMBATREACH, scale * DEFAULT_PLAYER_COMBAT_REACH);
 }
 
-bool Player::IsImmunedToSpellEffect(SpellInfo const* spellInfo, uint32 index, Unit* caster) const
+bool Player::IsImmunedToSpellEffect(SpellInfo const* spellInfo, uint32 index, WorldObject const* caster) const
 {
     // players are immune to taunt (the aura and the spell effect)
     if (spellInfo->Effects[index].IsAura(SPELL_AURA_MOD_TAUNT))
@@ -2193,17 +2183,17 @@ void Player::RegenerateHealth()
 
 void Player::ResetAllPowers()
 {
-    SetHealth(GetMaxHealth());
-    switch (getPowerType())
+    SetFullHealth();
+    switch (GetPowerType())
     {
         case POWER_MANA:
-            SetPower(POWER_MANA, GetMaxPower(POWER_MANA));
+            SetFullPower(POWER_MANA);
             break;
         case POWER_RAGE:
             SetPower(POWER_RAGE, 0);
             break;
         case POWER_ENERGY:
-            SetPower(POWER_ENERGY, GetMaxPower(POWER_ENERGY));
+            SetFullPower(POWER_ENERGY);
             break;
         case POWER_RUNIC_POWER:
             SetPower(POWER_RUNIC_POWER, 0);
@@ -2329,8 +2319,6 @@ void Player::SetInWater(bool apply)
 
     // remove auras that need water/land
     RemoveAurasWithInterruptFlags(apply ? AURA_INTERRUPT_FLAG_NOT_ABOVEWATER : AURA_INTERRUPT_FLAG_NOT_UNDERWATER);
-
-    getHostileRefManager().updateThreatTables();
 }
 
 bool Player::IsInAreaTriggerRadius(AreaTriggerEntry const* trigger) const
@@ -2365,15 +2353,11 @@ void Player::SetGameMaster(bool on)
         SetFlag(UNIT_FIELD_FLAGS_2, UNIT_FLAG2_ALLOW_CHEAT_SPELLS);
 
         if (Pet* pet = GetPet())
-        {
             pet->SetFaction(FACTION_FRIENDLY);
-            pet->getHostileRefManager().setOnlineOfflineState(false);
-        }
 
         RemoveByteFlag(UNIT_FIELD_BYTES_2, UNIT_BYTES_2_OFFSET_PVP_FLAG, UNIT_BYTE2_FLAG_FFA_PVP);
         ResetContestedPvP();
 
-        getHostileRefManager().setOnlineOfflineState(false);
         CombatStopWithPets();
 
         SetPhaseMask(uint32(PHASEMASK_ANYWHERE), false);    // see and visible in all phases
@@ -2401,7 +2385,7 @@ void Player::SetGameMaster(bool on)
         if (Pet* pet = GetPet())
         {
             pet->SetFaction(GetFaction());
-            pet->getHostileRefManager().setOnlineOfflineState(true);
+            pet->GetThreatManager().UpdateOnlineStates();
         }
 
         // restore FFA PvP Server state
@@ -2411,7 +2395,6 @@ void Player::SetGameMaster(bool on)
         // restore FFA PvP area state, remove not allowed for GM mounts
         UpdateArea(m_areaUpdateId);
 
-        getHostileRefManager().setOnlineOfflineState(true);
         m_serverSideVisibilityDetect.SetValue(SERVERSIDE_VISIBILITY_GM, SEC_PLAYER);
     }
 
@@ -2635,12 +2618,7 @@ void Player::GiveLevel(uint8 level)
 
     // set current level health and mana/energy to maximum after applying all mods.
     SetFullHealth();
-    SetPower(POWER_MANA, GetMaxPower(POWER_MANA));
-    SetPower(POWER_ENERGY, GetMaxPower(POWER_ENERGY));
-    if (GetPower(POWER_RAGE) > GetMaxPower(POWER_RAGE))
-        SetPower(POWER_RAGE, GetMaxPower(POWER_RAGE));
-    SetPower(POWER_FOCUS, 0);
-    SetPower(POWER_HAPPINESS, 0);
+    SetFullPower(POWER_MANA);
 
     // update level to hunter/summon pet
     if (Pet* pet = GetPet())
@@ -2857,11 +2835,11 @@ void Player::InitStatsForLevel(bool reapplyMods)
 
     // set current level health and mana/energy to maximum after applying all mods.
     SetFullHealth();
-    SetPower(POWER_MANA, GetMaxPower(POWER_MANA));
-    SetPower(POWER_ENERGY, GetMaxPower(POWER_ENERGY));
+    SetFullPower(POWER_MANA);
+    SetFullPower(POWER_ENERGY);
     if (GetPower(POWER_RAGE) > GetMaxPower(POWER_RAGE))
-        SetPower(POWER_RAGE, GetMaxPower(POWER_RAGE));
-    SetPower(POWER_FOCUS, 0);
+        SetFullPower(POWER_RAGE);
+    SetFullPower(POWER_FOCUS);
     SetPower(POWER_HAPPINESS, 0);
     SetPower(POWER_RUNIC_POWER, 0);
 
@@ -6384,16 +6362,11 @@ void Player::CheckAreaExploreAndOutdoor()
     if (IsInFlight())
         return;
 
-    bool isOutdoor;
-    uint32 areaId = GetBaseMap()->GetAreaId(GetPositionX(), GetPositionY(), GetPositionZ(), &isOutdoor);
-    AreaTableEntry const* areaEntry = sAreaTableStore.LookupEntry(areaId);
-
-    if (sWorld->getBoolConfig(CONFIG_VMAP_INDOOR_CHECK) && !isOutdoor)
+    if (sWorld->getBoolConfig(CONFIG_VMAP_INDOOR_CHECK) && !IsOutdoors())
         RemoveAurasWithAttribute(SPELL_ATTR0_OUTDOORS_ONLY);
 
-    if (!areaId)
-        return;
-
+    uint32 const areaId = GetAreaId();
+    AreaTableEntry const* areaEntry = sAreaTableStore.LookupEntry(areaId);
     if (!areaEntry)
     {
         TC_LOG_ERROR("entities.player", "Player '%s' (%s) discovered unknown area (x: %f y: %f z: %f map: %u)",
@@ -7003,6 +6976,7 @@ void Player::UpdateZone(uint32 newZone, uint32 newArea)
 {
     if (!IsInWorld())
         return;
+
     uint32 const oldZone = m_zoneUpdateId;
     m_zoneUpdateId = newZone;
     m_zoneUpdateTimer = ZONE_UPDATE_INTERVAL;
@@ -7012,8 +6986,8 @@ void Player::UpdateZone(uint32 newZone, uint32 newArea)
     // call leave script hooks immedately (before updating flags)
     if (oldZone != newZone)
     {
-        sOutdoorPvPMgr->HandlePlayerLeaveZone(this, m_zoneUpdateId);
-        sBattlefieldMgr->HandlePlayerLeaveZone(this, m_zoneUpdateId);
+        sOutdoorPvPMgr->HandlePlayerLeaveZone(this, oldZone);
+        sBattlefieldMgr->HandlePlayerLeaveZone(this, oldZone);
     }
 
     // group update
@@ -7265,7 +7239,6 @@ void Player::_ApplyItemMods(Item* item, uint8 slot, bool apply, bool updateItemA
         return;
 
     ItemTemplate const* proto = item->GetTemplate();
-
     if (!proto)
         return;
 
@@ -7298,22 +7271,36 @@ void Player::_ApplyItemMods(Item* item, uint8 slot, bool apply, bool updateItemA
     TC_LOG_DEBUG("entities.player.items", "Player::_ApplyItemMods: completed");
 }
 
+ScalingStatDistributionEntry const* Player::GetScalingStatDistributionFor(ItemTemplate const& itemTemplate) const
+{
+    if (!itemTemplate.ScalingStatDistribution)
+        return nullptr;
+
+    return sScalingStatDistributionStore.LookupEntry(itemTemplate.ScalingStatDistribution);
+}
+
+ScalingStatValuesEntry const* Player::GetScalingStatValuesFor(ItemTemplate const& itemTemplate) const
+{
+    if (!itemTemplate.ScalingStatValue)
+        return nullptr;
+
+    ScalingStatDistributionEntry const* ssd = GetScalingStatDistributionFor(itemTemplate);
+    if (!ssd)
+        return nullptr;
+
+    // req. check at equip, but allow use for extended range if range limit max level, set proper level
+    uint32 const ssd_level = std::min(uint32(getLevel()), ssd->MaxLevel);
+    return sScalingStatValuesStore.LookupEntry(ssd_level);
+}
+
 void Player::_ApplyItemBonuses(ItemTemplate const* proto, uint8 slot, bool apply, bool only_level_scale /*= false*/)
 {
     if (slot >= INVENTORY_SLOT_BAG_END || !proto)
         return;
 
-    ScalingStatDistributionEntry const* ssd = proto->ScalingStatDistribution ? sScalingStatDistributionStore.LookupEntry(proto->ScalingStatDistribution) : nullptr;
-    if (only_level_scale && !ssd)
-        return;
-
-    // req. check at equip, but allow use for extended range if range limit max level, set proper level
-    uint32 ssd_level = getLevel();
-    if (ssd && ssd_level > ssd->MaxLevel)
-        ssd_level = ssd->MaxLevel;
-
-    ScalingStatValuesEntry const* ssv = proto->ScalingStatValue ? sScalingStatValuesStore.LookupEntry(ssd_level) : nullptr;
-    if (only_level_scale && !ssv)
+    ScalingStatDistributionEntry const* ssd = GetScalingStatDistributionFor(*proto);
+    ScalingStatValuesEntry const* ssv = GetScalingStatValuesFor(*proto);
+    if (only_level_scale && (!ssd || !ssv))
         return;
 
     for (uint8 i = 0; i < MAX_ITEM_PROTO_STATS; ++i)
@@ -7551,22 +7538,9 @@ void Player::_ApplyItemBonuses(ItemTemplate const* proto, uint8 slot, bool apply
     if (proto->ArcaneRes)
         HandleStatFlatModifier(UNIT_MOD_RESISTANCE_ARCANE, BASE_VALUE, float(proto->ArcaneRes), apply);
 
-    WeaponAttackType attType = BASE_ATTACK;
-
-    if (slot == EQUIPMENT_SLOT_RANGED && (
-        proto->InventoryType == INVTYPE_RANGED || proto->InventoryType == INVTYPE_THROWN ||
-        proto->InventoryType == INVTYPE_RANGEDRIGHT))
-    {
-        attType = RANGED_ATTACK;
-    }
-    else if (slot == EQUIPMENT_SLOT_OFFHAND)
-    {
-        attType = OFF_ATTACK;
-    }
-
-    if (CanUseAttackType(attType))
-        _ApplyWeaponDamage(slot, proto, ssv, apply);
-
+    WeaponAttackType attType = Player::GetAttackBySlot(slot);
+    if (attType != MAX_ATTACK)
+        _ApplyWeaponDamage(slot, proto, apply);
 
     // Druids get feral AP bonus from weapon dps (also use DPS from ScalingStatValue)
     if (getClass() == CLASS_DRUID)
@@ -7585,65 +7559,72 @@ void Player::_ApplyItemBonuses(ItemTemplate const* proto, uint8 slot, bool apply
     }
 }
 
-void Player::_ApplyWeaponDamage(uint8 slot, ItemTemplate const* proto, ScalingStatValuesEntry const* ssv, bool apply)
+void Player::_ApplyWeaponDamage(uint8 slot, ItemTemplate const* proto, bool apply)
 {
-    WeaponAttackType attType = BASE_ATTACK;
-    float damage = 0.0f;
+    WeaponAttackType attType = Player::GetAttackBySlot(slot);
+    if (!IsInFeralForm() && apply && !CanUseAttackType(attType))
+        return;
 
-    if (slot == EQUIPMENT_SLOT_RANGED && (
-        proto->InventoryType == INVTYPE_RANGED || proto->InventoryType == INVTYPE_THROWN ||
-        proto->InventoryType == INVTYPE_RANGEDRIGHT))
+    ScalingStatValuesEntry const* ssv = GetScalingStatValuesFor(*proto);
+    for (uint8 i = 0; i < MAX_ITEM_PROTO_DAMAGES; ++i)
     {
-        attType = RANGED_ATTACK;
-    }
-    else if (slot == EQUIPMENT_SLOT_OFFHAND)
-    {
-        attType = OFF_ATTACK;
-    }
+        float minDamage = proto->Damage[i].DamageMin;
+        float maxDamage = proto->Damage[i].DamageMax;
 
-    float minDamage = proto->Damage[0].DamageMin;
-    float maxDamage = proto->Damage[0].DamageMax;
-
-    // If set dpsMod in ScalingStatValue use it for min (70% from average), max (130% from average) damage
-    if (ssv)
-    {
-        int32 extraDPS = ssv->getDPSMod(proto->ScalingStatValue);
-        if (extraDPS)
+        // If set dpsMod in ScalingStatValue use it for min (70% from average), max (130% from average) damage
+        if (ssv && i == 0) // scaling stats only for first damage
         {
-            float average = extraDPS * proto->Delay / 1000.0f;
-            minDamage = 0.7f * average;
-            maxDamage = 1.3f * average;
+            int32 extraDPS = ssv->getDPSMod(proto->ScalingStatValue);
+            if (extraDPS)
+            {
+                float average = extraDPS * proto->Delay / 1000.0f;
+                minDamage = 0.7f * average;
+                maxDamage = 1.3f * average;
+            }
+        }
+
+        if (apply)
+        {
+            if (minDamage > 0.f)
+                SetBaseWeaponDamage(attType, MINDAMAGE, minDamage, i);
+
+            if (maxDamage > 0.f)
+                SetBaseWeaponDamage(attType, MAXDAMAGE, maxDamage, i);
         }
     }
 
-    if (minDamage > 0)
+    if (!apply)
     {
-        damage = apply ? minDamage : BASE_MINDAMAGE;
-        SetBaseWeaponDamage(attType, MINDAMAGE, damage);
-    }
+        for (uint8 i = 0; i < MAX_ITEM_PROTO_DAMAGES; ++i)
+        {
+            SetBaseWeaponDamage(attType, MINDAMAGE, 0.f, i);
+            SetBaseWeaponDamage(attType, MAXDAMAGE, 0.f, i);
+        }
 
-    if (maxDamage  > 0)
-    {
-        damage = apply ? maxDamage : BASE_MAXDAMAGE;
-        SetBaseWeaponDamage(attType, MAXDAMAGE, damage);
+        if (attType == BASE_ATTACK)
+        {
+            SetBaseWeaponDamage(BASE_ATTACK, MINDAMAGE, BASE_MINDAMAGE);
+            SetBaseWeaponDamage(BASE_ATTACK, MAXDAMAGE, BASE_MAXDAMAGE);
+        }
     }
 
     if (proto->Delay && !IsInFeralForm())
-    {
-        if (slot == EQUIPMENT_SLOT_RANGED)
-            SetAttackTime(RANGED_ATTACK, apply ? proto->Delay: BASE_ATTACK_TIME);
-        else if (slot == EQUIPMENT_SLOT_MAINHAND)
-            SetAttackTime(BASE_ATTACK, apply ? proto->Delay: BASE_ATTACK_TIME);
-        else if (slot == EQUIPMENT_SLOT_OFFHAND)
-            SetAttackTime(OFF_ATTACK, apply ? proto->Delay: BASE_ATTACK_TIME);
-    }
+        SetAttackTime(attType, apply ? proto->Delay : BASE_ATTACK_TIME);
 
     // No need to modify any physical damage for ferals as it is calculated from stats only
     if (IsInFeralForm())
         return;
 
-    if (CanModifyStats() && (damage || proto->Delay))
+    if (CanModifyStats() && (GetWeaponDamageRange(attType, MAXDAMAGE) || proto->Delay))
         UpdateDamagePhysical(attType);
+}
+
+SpellSchoolMask Player::GetMeleeDamageSchoolMask(WeaponAttackType attackType /*= BASE_ATTACK*/, uint8 damageIndex /*= 0*/) const
+{
+    if (Item const* weapon = GetWeaponForAttack(attackType, true))
+        return SpellSchoolMask(1 << weapon->GetTemplate()->Damage[damageIndex].DamageType);
+
+    return SPELL_SCHOOL_MASK_NORMAL;
 }
 
 void Player::CastAllObtainSpells()
@@ -8029,7 +8010,7 @@ void Player::CastItemCombatSpell(DamageInfo const& damageInfo, Item* item, ItemT
                     for (uint8 i = 0; i < MAX_SPELL_EFFECTS; ++i)
                     {
                         if (spellInfo->Effects[i].IsEffect())
-                            args.SpellValueOverrides.AddMod(static_cast<SpellValueMod>(SPELLVALUE_BASE_POINT0 + i), CalculatePct(spellInfo->Effects[i].CalcValue(this), effectPct));
+                            args.AddSpellMod(static_cast<SpellValueMod>(SPELLVALUE_BASE_POINT0 + i), CalculatePct(spellInfo->Effects[i].CalcValue(this), effectPct));
                     }
                 }
                 CastSpell(target, spellInfo->Id, args);
@@ -8413,7 +8394,7 @@ void Player::SendLoot(ObjectGuid guid, LootType loot_type)
 
             if (go->GetLootMode() > 0)
                 if (GameObjectTemplateAddon const* addon = go->GetTemplateAddon())
-                    loot->generateMoneyLoot(addon->mingold, addon->maxgold);
+                    loot->generateMoneyLoot(addon->Mingold, addon->Maxgold);
 
             if (loot_type == LOOT_FISHING)
                 go->getFishLoot(loot, this);
@@ -12222,10 +12203,9 @@ void Player::RemoveItem(uint8 bag, uint8 slot, bool update)
         {
             if (slot < INVENTORY_SLOT_BAG_END)
             {
-                ItemTemplate const* pProto = pItem->GetTemplate();
                 // item set bonuses applied only at equip and removed at unequip, and still active for broken items
-
-                if (pProto && pProto->ItemSet)
+                ItemTemplate const* pProto = ASSERT_NOTNULL(pItem->GetTemplate());
+                if (pProto->ItemSet)
                     RemoveItemsSetItem(this, pProto);
 
                 _ApplyItemMods(pItem, slot, false, update);
@@ -12370,7 +12350,6 @@ void Player::DestroyItem(uint8 bag, uint8 slot, bool update)
             // equipment and equipped bags can have applied bonuses
             if (slot < INVENTORY_SLOT_BAG_END)
             {
-
                 // item set bonuses applied only at equip and removed at unequip, and still active for broken items
                 if (pProto->ItemSet)
                     RemoveItemsSetItem(this, pProto);
@@ -13685,12 +13664,12 @@ void Player::ApplyEnchantment(Item* item, EnchantmentSlot slot, bool apply, bool
                                     }
                                 }
                             }
-                            
+
                             CastSpellExtraArgs args(item);
                             // Cast custom spell vs all equal basepoints got from enchant_amount
                             if (basepoints)
                                 for (uint32 i = 0; i < MAX_SPELL_EFFECTS; ++i)
-                                    args.SpellValueOverrides.AddMod(SpellValueMod(SPELLVALUE_BASE_POINT0 + i), basepoints);
+                                    args.AddSpellMod(SpellValueMod(SPELLVALUE_BASE_POINT0 + i), basepoints);
 
                             CastSpell(this, enchant_spell_id, args);
                         }
@@ -17549,6 +17528,7 @@ bool Player::LoadFromDB(ObjectGuid guid, SQLQueryHolder *holder)
         m_activeSpec = 0;
     }
 
+    UpdateDisplayPower();
     _LoadTalents(holder->GetPreparedResult(PLAYER_LOGIN_QUERY_LOAD_TALENTS));
     _LoadSpells(holder->GetPreparedResult(PLAYER_LOGIN_QUERY_LOAD_SPELLS));
 
@@ -17614,11 +17594,11 @@ bool Player::LoadFromDB(ObjectGuid guid, SQLQueryHolder *holder)
 
     // restore remembered power/health values (but not more max values)
     uint32 savedHealth = fields[55].GetUInt32();
-    SetHealth(savedHealth > GetMaxHealth() ? GetMaxHealth() : savedHealth);
+    SetHealth(savedHealth);
     for (uint8 i = 0; i < MAX_POWERS; ++i)
     {
         uint32 savedPower = fields[56 + i].GetUInt32();
-        SetPower(Powers(i), savedPower > GetMaxPower(Powers(i)) ? GetMaxPower(Powers(i)) : savedPower);
+        SetPower(static_cast<Powers>(i), savedPower);
     }
 
     TC_LOG_DEBUG("entities.player.loading", "Player::LoadFromDB: The value of player '%s' after load item and aura is: ", m_name.c_str());
@@ -17774,8 +17754,8 @@ void Player::_LoadAuras(PreparedQueryResult result, uint32 timediff)
 
     /*                                                           0       1        2         3                 4         5      6       7         8              9            10
     QueryResult* result = CharacterDatabase.PQuery("SELECT casterGuid, spell, effectMask, recalculateMask, stackCount, amount0, amount1, amount2, base_amount0, base_amount1, base_amount2,
-                                                        11          12          13
-                                                    maxDuration, remainTime, remainCharges FROM character_aura WHERE guid = '%u'", GetGUID().GetCounter());
+                                                        11          12          13              14               15
+                                                    maxDuration, remainTime, remainCharges, critChance, applyResilience FROM character_aura WHERE guid = '%u'", GetGUID().GetCounter());
     */
 
     if (result)
@@ -17799,6 +17779,8 @@ void Player::_LoadAuras(PreparedQueryResult result, uint32 timediff)
             int32 maxduration = fields[11].GetInt32();
             int32 remaintime = fields[12].GetInt32();
             uint8 remaincharges = fields[13].GetUInt8();
+            float critChance = fields[14].GetFloat();
+            bool applyResilience = fields[15].GetBool();
 
             SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(spellid);
             if (!spellInfo)
@@ -17809,7 +17791,7 @@ void Player::_LoadAuras(PreparedQueryResult result, uint32 timediff)
             }
 
             // negative effects should continue counting down after logout
-            if (remaintime != -1 && !spellInfo->IsPositive())
+            if (remaintime != -1 && ((!spellInfo->IsPositive() && spellInfo->Id != 15007) || spellInfo->HasAttribute(SPELL_ATTR4_FADES_WHILE_LOGGED_OUT))) // Resurrection sickness should not fade while logged out
             {
                 if (remaintime/IN_MILLISECONDS <= int32(timediff))
                     continue;
@@ -17828,7 +17810,12 @@ void Player::_LoadAuras(PreparedQueryResult result, uint32 timediff)
             else
                 remaincharges = 0;
 
-            if (Aura* aura = Aura::TryCreate(spellInfo, effmask, this, nullptr, &baseDamage[0], nullptr, caster_guid))
+            AuraCreateInfo createInfo(spellInfo, effmask, this);
+            createInfo
+                .SetCasterGUID(caster_guid)
+                .SetBaseAmount(baseDamage);
+
+            if (Aura* aura = Aura::TryCreate(createInfo))
             {
                 if (!aura->CanBeSaved())
                 {
@@ -17836,7 +17823,7 @@ void Player::_LoadAuras(PreparedQueryResult result, uint32 timediff)
                     continue;
                 }
 
-                aura->SetLoadedState(maxduration, remaintime, remaincharges, stackcount, recalculatemask, &damage[0]);
+                aura->SetLoadedState(maxduration, remaintime, remaincharges, stackcount, recalculatemask, critChance, applyResilience, &damage[0]);
                 aura->ApplyForTargets();
                 TC_LOG_DEBUG("entities.player", "Player::_LoadAuras: Added aura (SpellID: %u, EffectMask: %u) to player '%s (%s)",
                     spellInfo->Id, effmask, GetName().c_str(), GetGUID().ToString().c_str());
@@ -19522,7 +19509,9 @@ void Player::_SaveAuras(SQLTransaction& trans)
         stmt->setInt32(index++, baseDamage[2]);
         stmt->setInt32(index++, itr->second->GetMaxDuration());
         stmt->setInt32(index++, itr->second->GetDuration());
-        stmt->setUInt8(index, itr->second->GetCharges());
+        stmt->setUInt8(index++, itr->second->GetCharges());
+        stmt->setFloat(index++, itr->second->GetCritChance());
+        stmt->setBool (index++, itr->second->CanApplyResilience());
         trans->Append(stmt);
     }
 }
@@ -20875,6 +20864,10 @@ bool Player::IsAffectedBySpellmod(SpellInfo const* spellInfo, SpellModifier* mod
     if (mod->op == SPELLMOD_DURATION && spellInfo->GetDuration() == -1)
         return false;
 
+    // mod crit to spells that can't crit
+    if (mod->op == SPELLMOD_CRITICAL_CHANCE && !spellInfo->HasAttribute(SPELL_ATTR0_CU_CAN_CRIT))
+        return false;
+
     return spellInfo->IsAffectedBySpellMod(mod);
 }
 
@@ -20888,102 +20881,47 @@ void Player::ApplySpellMod(uint32 spellId, SpellModOp op, T& basevalue, Spell* s
     float totalmul = 1.0f;
     int32 totalflat = 0;
 
-    // Drop charges for triggering spells instead of triggered ones
-    if (m_spellModTakingSpell)
-        spell = m_spellModTakingSpell;
-
-    switch (op)
+    auto calculateSpellMod = [&](SpellModifier* mod)
     {
-        // special case, if a mod makes spell instant, only consume that mod
-        case SPELLMOD_CASTING_TIME:
-        {
-            SpellModifier* modInstantSpell = nullptr;
-            for (SpellModifier* mod : m_spellMods[op])
-            {
-                if (!IsAffectedBySpellmod(spellInfo, mod, spell))
-                    continue;
-
-                if (mod->type == SPELLMOD_PCT && basevalue < T(10000) && mod->value <= -100)
-                {
-                    modInstantSpell = mod;
-                    break;
-                }
-            }
-
-            if (modInstantSpell)
-            {
-                Player::ApplyModToSpell(modInstantSpell, spell);
-                basevalue = T(0);
-                return;
-            }
-            break;
-        }
-        // special case if two mods apply 100% critical chance, only consume one
-        case SPELLMOD_CRITICAL_CHANCE:
-        {
-            SpellModifier* modCritical = nullptr;
-            for (SpellModifier* mod : m_spellMods[op])
-            {
-                if (!IsAffectedBySpellmod(spellInfo, mod, spell))
-                    continue;
-
-                if (mod->type == SPELLMOD_FLAT && mod->value >= 100)
-                {
-                    modCritical = mod;
-                    break;
-                }
-            }
-
-            if (modCritical)
-            {
-                Player::ApplyModToSpell(modCritical, spell);
-                basevalue = T(100);
-                return;
-            }
-            break;
-        }
-        default:
-            break;
-    }
-
-    for (SpellModifier* mod : m_spellMods[op])
-    {
-        if (!IsAffectedBySpellmod(spellInfo, mod, spell))
-            continue;
-
         switch (mod->type)
         {
             case SPELLMOD_FLAT:
                 totalflat += mod->value;
                 break;
             case SPELLMOD_PCT:
-            {
-                // skip percent mods with null basevalue (most important for spell mods with charges)
-                if (basevalue == T(0))
-                    continue;
-
                 // special case (skip > 10sec spell casts for instant cast setting)
                 if (op == SPELLMOD_CASTING_TIME && mod->value <= -100 && basevalue >= T(10000))
-                    continue;
-                else if (!Player::HasSpellModApplied(mod, spell))
-                {
-                    // special case for Surge of Light, don't apply critical chance reduction if other mods not applied (ie procs while casting another spell)
-                    // (Surge of Light is the only PCT_MOD on critical chance)
-                    if (op == SPELLMOD_CRITICAL_CHANCE)
-                        continue;
-                    // special case for Backdraft, dont' apply GCD reduction if cast time reduction wasn't applied (ie when Backlash is consumed first)
-                    // (Backdraft is the only PCT_MOD on global cooldown)
-                    else if (op == SPELLMOD_GLOBAL_COOLDOWN)
-                        continue;
-                }
+                    return;
 
                 totalmul += CalculatePct(1.0f, mod->value);
                 break;
-            }
         }
 
         Player::ApplyModToSpell(mod, spell);
+    };
+
+    // Drop charges for triggering spells instead of triggered ones
+    if (m_spellModTakingSpell)
+        spell = m_spellModTakingSpell;
+
+    SpellModifier* chargedMod = nullptr;
+    for (SpellModifier* mod : m_spellMods[op])
+    {
+        if (!IsAffectedBySpellmod(spellInfo, mod, spell))
+            continue;
+
+        if (mod->ownerAura->IsUsingCharges())
+        {
+            if (!chargedMod || (chargedMod->ownerAura->GetSpellInfo()->Priority < mod->ownerAura->GetSpellInfo()->Priority))
+                chargedMod = mod;
+            continue;
+        }
+
+        calculateSpellMod(mod);
     }
+
+    if (chargedMod)
+        calculateSpellMod(chargedMod);
 
     basevalue = T(float(basevalue + totalflat) * totalmul);
 }
@@ -21027,14 +20965,6 @@ void Player::AddSpellMod(SpellModifier* mod, bool apply)
         m_spellMods[mod->op].insert(mod);
     else
         m_spellMods[mod->op].erase(mod);
-}
-
-bool Player::HasSpellModApplied(SpellModifier* mod, Spell* spell)
-{
-    if (!spell)
-        return false;
-
-    return spell->m_appliedMods.count(mod->ownerAura) != 0;
 }
 
 void Player::ApplyModToSpell(SpellModifier* mod, Spell* spell)
@@ -21323,7 +21253,6 @@ void Player::CleanupAfterTaxiFlight()
     m_taxi.ClearTaxiDestinations();        // not destinations, clear source node
     Dismount();
     RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_REMOVE_CLIENT_CONTROL | UNIT_FLAG_TAXI_FLIGHT);
-    getHostileRefManager().setOnlineOfflineState(true);
 }
 
 void Player::ContinueTaxiFlight() const
@@ -21411,30 +21340,7 @@ void Player::InitDataForForm(bool reapplyMods)
     else
         SetRegularAttackTime();
 
-    switch (form)
-    {
-        case FORM_GHOUL:
-        case FORM_CAT:
-        {
-            if (getPowerType() != POWER_ENERGY)
-                setPowerType(POWER_ENERGY);
-            break;
-        }
-        case FORM_BEAR:
-        case FORM_DIREBEAR:
-        {
-            if (getPowerType() != POWER_RAGE)
-                setPowerType(POWER_RAGE);
-            break;
-        }
-        default:                                            // 0, for example
-        {
-            ChrClassesEntry const* cEntry = sChrClassesStore.LookupEntry(getClass());
-            if (cEntry && cEntry->powerType < MAX_POWERS && uint32(getPowerType()) != cEntry->powerType)
-                setPowerType(Powers(cEntry->powerType));
-            break;
-        }
-    }
+    UpdateDisplayPower();
 
     // update auras at form change, ignore this at mods reapply (.reset stats/etc) when form not change.
     if (!reapplyMods)
@@ -21848,7 +21754,7 @@ void Player::UpdatePotionCooldown(Spell* spell)
     m_lastPotionId = 0;
 }
 
-void Player::SetResurrectRequestData(Unit* caster, uint32 health, uint32 mana, uint32 appliedAura)
+void Player::SetResurrectRequestData(WorldObject const* caster, uint32 health, uint32 mana, uint32 appliedAura)
 {
     ASSERT(!IsResurrectRequested());
     _resurrectionData.reset(new ResurrectionData());
@@ -22160,6 +22066,7 @@ void Player::ReportedAfkBy(Player* reporter)
 WorldLocation Player::GetStartPosition() const
 {
     PlayerInfo const* info = sObjectMgr->GetPlayerInfo(getRace(), getClass());
+    ASSERT(info);
     uint32 mapId = info->mapId;
     if (getClass() == CLASS_DEATH_KNIGHT && HasSpell(50977))
         mapId = 0;
@@ -22470,7 +22377,7 @@ Unit* Player::GetSelectedUnit() const
 Player* Player::GetSelectedPlayer() const
 {
     if (ObjectGuid selectionGUID = GetTarget())
-        return ObjectAccessor::GetPlayer(*this, selectionGUID);
+        return ObjectAccessor::FindConnectedPlayer(selectionGUID);
     return nullptr;
 }
 
@@ -22779,6 +22686,7 @@ void Player::LearnCustomSpells()
 
     // learn default race/class spells
     PlayerInfo const* info = sObjectMgr->GetPlayerInfo(getRace(), getClass());
+    ASSERT(info);
     for (PlayerCreateInfoSpells::const_iterator itr = info->customSpells.begin(); itr != info->customSpells.end(); ++itr)
     {
         uint32 tspell = *itr;
@@ -22795,6 +22703,7 @@ void Player::LearnDefaultSkills()
 {
     // learn default race/class skills
     PlayerInfo const* info = sObjectMgr->GetPlayerInfo(getRace(), getClass());
+    ASSERT(info);
     for (PlayerCreateInfoSkills::const_iterator itr = info->skills.begin(); itr != info->skills.end(); ++itr)
     {
         uint32 skillId = itr->SkillId;
@@ -23123,10 +23032,13 @@ Battleground* Player::GetBattleground() const
     return sBattlegroundMgr->GetBattleground(GetBattlegroundId(), m_bgData.bgTypeID);
 }
 
-bool Player::InBattlegroundQueue() const
+bool Player::InBattlegroundQueue(bool ignoreArena) const
 {
     for (uint8 i = 0; i < PLAYER_MAX_BATTLEGROUND_QUEUES; ++i)
-        if (m_bgBattlegroundQueueID[i].bgQueueTypeId != BATTLEGROUND_QUEUE_NONE)
+        if (m_bgBattlegroundQueueID[i].bgQueueTypeId != BATTLEGROUND_QUEUE_NONE && (!ignoreArena ||
+            (ignoreArena && m_bgBattlegroundQueueID[i].bgQueueTypeId != BATTLEGROUND_QUEUE_2v2 &&
+            m_bgBattlegroundQueueID[i].bgQueueTypeId != BATTLEGROUND_QUEUE_3v3 &&
+            m_bgBattlegroundQueueID[i].bgQueueTypeId != BATTLEGROUND_QUEUE_5v5)))
             return true;
     return false;
 }
@@ -23347,12 +23259,12 @@ void Player::UpdateForQuestWorldObjects()
             if (!obj->HasFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_SPELLCLICK))
                 continue;
 
-            SpellClickInfoMapBounds clickPair = sObjectMgr->GetSpellClickInfoMapBounds(obj->GetEntry());
-            for (SpellClickInfoContainer::const_iterator _itr = clickPair.first; _itr != clickPair.second; ++_itr)
+            auto clickBounds = sObjectMgr->GetSpellClickInfoMapBounds(obj->GetEntry());
+            for (auto const& clickPair : clickBounds)
             {
                 //! This code doesn't look right, but it was logically converted to condition system to do the exact
                 //! same thing it did before. It definitely needs to be overlooked for intended functionality.
-                if (ConditionContainer const* conds = sConditionMgr->GetConditionsForSpellClickEvent(obj->GetEntry(), _itr->second.spellId))
+                if (ConditionContainer const* conds = sConditionMgr->GetConditionsForSpellClickEvent(obj->GetEntry(), clickPair.second.spellId))
                 {
                     bool buildUpdateBlock = false;
                     for (ConditionContainer::const_iterator jtr = conds->begin(); jtr != conds->end() && !buildUpdateBlock; ++jtr)
@@ -23510,22 +23422,32 @@ bool Player::HasItemFitToSpellRequirements(SpellInfo const* spellInfo, Item cons
         }
         case ITEM_CLASS_ARMOR:
         {
+            // most used check: shield only
+            if (spellInfo->EquippedItemSubClassMask & ((1 << ITEM_SUBCLASS_ARMOR_BUCKLER) | (1 << ITEM_SUBCLASS_ARMOR_SHIELD)))
+            {
+                if (Item* item = GetUseableItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND))
+                    if (item != ignoreItem && item->IsFitToSpellRequirements(spellInfo))
+                        return true;
+
+                // special check to filter things like Shield Wall, the aura is not permanent and must stay even without required item
+                if (!spellInfo->IsPassive())
+                {
+                    for (uint8 i = 0; i < MAX_SPELL_EFFECTS; ++i)
+                        if (spellInfo->Effects[i].IsAura())
+                            return true;
+                }
+            }
+
             // tabard not have dependent spells
             for (uint8 i = EQUIPMENT_SLOT_START; i < EQUIPMENT_SLOT_MAINHAND; ++i)
                 if (Item* item = GetUseableItemByPos(INVENTORY_SLOT_BAG_0, i))
                     if (item != ignoreItem && item->IsFitToSpellRequirements(spellInfo))
                         return true;
 
-            // shields can be equipped to offhand slot
-            if (Item* item = GetUseableItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND))
-                if (item != ignoreItem && item->IsFitToSpellRequirements(spellInfo))
-                    return true;
-
             // ranged slot can have some armor subclasses
             if (Item* item = GetUseableItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_RANGED))
                 if (item != ignoreItem && item->IsFitToSpellRequirements(spellInfo))
                     return true;
-
             break;
         }
         default:
@@ -23790,25 +23712,21 @@ void Player::ResurrectUsingRequestDataImpl()
 
     ResurrectPlayer(0.0f, false);
 
-    if (GetMaxHealth() > resurrectHealth)
-        SetHealth(resurrectHealth);
-    else
-        SetFullHealth();
-
-    if (GetMaxPower(POWER_MANA) > resurrectMana)
-        SetPower(POWER_MANA, resurrectMana);
-    else
-        SetPower(POWER_MANA, GetMaxPower(POWER_MANA));
+    SetHealth(resurrectHealth);
+    SetPower(POWER_MANA, resurrectMana);
 
     SetPower(POWER_RAGE, 0);
-
-    SetPower(POWER_ENERGY, GetMaxPower(POWER_ENERGY));
+    SetFullPower(POWER_ENERGY);
 
     SpawnCorpseBones();
 }
 
 void Player::SetClientControl(Unit* target, bool allowMove)
 {
+    // still affected by some aura that shouldn't allow control, only allow on last such aura to be removed
+    if (allowMove && target->HasUnitState(UNIT_STATE_CANT_CLIENT_CONTROL))
+        return;
+
     WorldPacket data(SMSG_CLIENT_CONTROL_UPDATE, target->GetPackGUID().size()+1);
     data << target->GetPackGUID();
     data << uint8(allowMove ? 1 : 0);
@@ -23824,8 +23742,13 @@ void Player::SetClientControl(Unit* target, bool allowMove)
 void Player::SetMovedUnit(Unit* target)
 {
     m_unitMovedByMe->m_playerMovingMe = nullptr;
+    if (m_unitMovedByMe->GetTypeId() == TYPEID_UNIT)
+        m_unitMovedByMe->GetMotionMaster()->Initialize();
+
     m_unitMovedByMe = target;
     m_unitMovedByMe->m_playerMovingMe = this;
+    if (m_unitMovedByMe->GetTypeId() == TYPEID_UNIT)
+        m_unitMovedByMe->GetMotionMaster()->Initialize();
 }
 
 void Player::UpdateZoneDependentAuras(uint32 newZone)
@@ -24120,6 +24043,19 @@ void Player::ProcessTerrainStatusUpdate(ZLiquidStatus status, Optional<LiquidDat
     }
     else
         m_MirrorTimerFlags &= ~(UNDERWATER_INWATER | UNDERWATER_INLAVA | UNDERWATER_INSLIME | UNDERWATER_INDARKWATER);
+}
+
+void Player::AtExitCombat()
+{
+    Unit::AtExitCombat();
+    UpdatePotionCooldown();
+
+    if (getClass() == CLASS_DEATH_KNIGHT)
+        for (uint8 i = 0; i < MAX_RUNES; ++i)
+        {
+            SetRuneTimer(i, 0xFFFFFFFF);
+            SetLastRuneGraceTimer(i, 0);
+        }
 }
 
 void Player::SetCanParry(bool value)
@@ -24956,9 +24892,9 @@ void Player::ResetAchievementCriteria(AchievementCriteriaCondition condition, ui
     m_achievementMgr->ResetAchievementCriteria(condition, value, evenIfCriteriaComplete);
 }
 
-void Player::UpdateAchievementCriteria(AchievementCriteriaTypes type, uint32 miscValue1 /*= 0*/, uint32 miscValue2 /*= 0*/, Unit* unit /*= nullptr*/)
+void Player::UpdateAchievementCriteria(AchievementCriteriaTypes type, uint32 miscValue1 /*= 0*/, uint32 miscValue2 /*= 0*/, WorldObject* ref /*= nullptr*/)
 {
-    m_achievementMgr->UpdateAchievementCriteria(type, miscValue1, miscValue2, unit);
+    m_achievementMgr->UpdateAchievementCriteria(type, miscValue1, miscValue2, ref);
 }
 
 void Player::CompletedAchievement(AchievementEntry const* entry)
@@ -25256,16 +25192,16 @@ bool Player::CanSeeSpellClickOn(Creature const* c) const
     if (!c->HasFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_SPELLCLICK))
         return false;
 
-    SpellClickInfoMapBounds clickPair = sObjectMgr->GetSpellClickInfoMapBounds(c->GetEntry());
-    if (clickPair.first == clickPair.second)
+    auto clickBounds = sObjectMgr->GetSpellClickInfoMapBounds(c->GetEntry());
+    if (clickBounds.begin() == clickBounds.end())
         return true;
 
-    for (SpellClickInfoContainer::const_iterator itr = clickPair.first; itr != clickPair.second; ++itr)
+    for (auto const& clickPair : clickBounds)
     {
-        if (!itr->second.IsFitToRequirements(this, c))
+        if (!clickPair.second.IsFitToRequirements(this, c))
             return false;
 
-        if (sConditionMgr->IsObjectMeetingSpellClickConditions(c->GetEntry(), itr->second.spellId, const_cast<Player*>(this), const_cast<Creature*>(c)))
+        if (sConditionMgr->IsObjectMeetingSpellClickConditions(c->GetEntry(), clickPair.second.spellId, const_cast<Player*>(this), const_cast<Creature*>(c)))
             return true;
     }
 
@@ -25950,7 +25886,7 @@ void Player::ActivateSpec(uint8 spec)
         }));
     }
 
-    Powers pw = getPowerType();
+    Powers pw = GetPowerType();
     if (pw != POWER_MANA)
         SetPower(POWER_MANA, 0); // Mana must be 0 even if it isn't the active power type.
 
@@ -26478,7 +26414,6 @@ Pet* Player::SummonPet(uint32 entry, float x, float y, float z, float ang, PetTy
     pet->SetCreatorGUID(GetGUID());
     pet->SetFaction(GetFaction());
 
-    pet->setPowerType(POWER_MANA);
     pet->SetUInt32Value(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_NONE);
     pet->SetUInt32Value(UNIT_FIELD_BYTES_1, 0);
     pet->InitStatsForLevel(getLevel());
