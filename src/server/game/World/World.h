@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2018 TrinityCore <https://www.trinitycore.org/>
+ * Copyright (C) 2008-2019 TrinityCore <https://www.trinitycore.org/>
  * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -71,7 +71,6 @@ enum WorldTimers
 {
     WUPDATE_AUCTIONS,
     WUPDATE_AUCTIONS_PENDING,
-    WUPDATE_WEATHERS,
     WUPDATE_UPTIME,
     WUPDATE_CORPSES,
     WUPDATE_EVENTS,
@@ -109,7 +108,6 @@ enum WorldBoolConfigs
     CONFIG_GM_LOWER_SECURITY,
     CONFIG_SKILL_PROSPECTING,
     CONFIG_SKILL_MILLING,
-    CONFIG_SAVE_RESPAWN_TIME_IMMEDIATELY,
     CONFIG_WEATHER,
     CONFIG_ALWAYS_MAX_SKILL_FOR_LEVEL,
     CONFIG_QUEST_IGNORE_RAID,
@@ -313,6 +311,7 @@ enum WorldIntConfigs
     CONFIG_BATTLEGROUND_REPORT_AFK,
     CONFIG_ARENA_MAX_RATING_DIFFERENCE,
     CONFIG_ARENA_RATING_DISCARD_TIMER,
+    CONFIG_ARENA_PREV_OPPONENTS_DISCARD_TIMER,
     CONFIG_ARENA_RATED_UPDATE_TIMER,
     CONFIG_ARENA_AUTO_DISTRIBUTE_INTERVAL_DAYS,
     CONFIG_ARENA_SEASON_ID,
@@ -347,6 +346,7 @@ enum WorldIntConfigs
     CONFIG_PERSISTENT_CHARACTER_CLEAN_FLAGS,
     CONFIG_LFG_OPTIONSMASK,
     CONFIG_MAX_INSTANCES_PER_HOUR,
+    CONFIG_XP_BOOST_DAYMASK,
     CONFIG_WARDEN_CLIENT_RESPONSE_DELAY,
     CONFIG_WARDEN_CLIENT_CHECK_HOLDOFF,
     CONFIG_WARDEN_CLIENT_FAIL_ACTION,
@@ -459,6 +459,7 @@ enum Rates
     RATE_DURABILITY_LOSS_ABSORB,
     RATE_DURABILITY_LOSS_BLOCK,
     RATE_MOVESPEED,
+    RATE_XP_BOOST,
     RATE_MONEY_QUEST,
     RATE_MONEY_MAX_LEVEL_QUEST,
     MAX_RATES
@@ -523,11 +524,12 @@ enum RealmZone
 enum WorldStates
 {
     WS_ARENA_DISTRIBUTION_TIME  = 20001,                     // Next arena distribution time
-    WS_WEEKLY_QUEST_RESET_TIME  = 20002,                     // Next weekly reset time
+    WS_WEEKLY_QUEST_RESET_TIME  = 20002,                     // Next weekly quest reset time
     WS_BG_DAILY_RESET_TIME      = 20003,                     // Next daily BG reset time
     WS_CLEANING_FLAGS           = 20004,                     // Cleaning Flags
     WS_GUILD_DAILY_RESET_TIME   = 20006,                     // Next guild cap reset time
-    WS_MONTHLY_QUEST_RESET_TIME = 20007,                     // Next monthly reset time
+    WS_MONTHLY_QUEST_RESET_TIME = 20007,                     // Next monthly quest reset time
+    WS_DAILY_QUEST_RESET_TIME   = 20008                      // Next daily quest reset time
 };
 
 /// Storage class for commands issued for delayed execution
@@ -654,9 +656,9 @@ class TC_GAME_API World
         void SendGlobalText(char const* text, WorldSession* self);
         void SendGMText(uint32 string_id, ...);
         void SendServerMessage(ServerMessageType type, const char *text = "", Player* player = nullptr);
-        void SendGlobalMessage(WorldPacket* packet, WorldSession* self = nullptr, uint32 team = 0);
-        void SendGlobalGMMessage(WorldPacket* packet, WorldSession* self = nullptr, uint32 team = 0);
-        bool SendZoneMessage(uint32 zone, WorldPacket* packet, WorldSession* self = nullptr, uint32 team = 0);
+        void SendGlobalMessage(WorldPacket const* packet, WorldSession* self = nullptr, uint32 team = 0);
+        void SendGlobalGMMessage(WorldPacket const* packet, WorldSession* self = nullptr, uint32 team = 0);
+        bool SendZoneMessage(uint32 zone, WorldPacket const* packet, WorldSession* self = nullptr, uint32 team = 0);
         void SendZoneText(uint32 zone, const char *text, WorldSession* self = nullptr, uint32 team = 0);
 
         /// Are we in the middle of a shutdown?
@@ -759,8 +761,8 @@ class TC_GAME_API World
         void UpdateAreaDependentAuras();
 
         uint32 GetCleaningFlags() const { return m_CleaningFlags; }
-        void   SetCleaningFlags(uint32 flags) { m_CleaningFlags = flags; }
-        void   ResetEventSeasonalQuests(uint16 event_id);
+        void SetCleaningFlags(uint32 flags) { m_CleaningFlags = flags; }
+        void ResetEventSeasonalQuests(uint16 event_id);
 
         void ReloadRBAC();
 
@@ -878,6 +880,8 @@ class TC_GAME_API World
         bool _guidAlert;
         uint32 _warnDiff;
         time_t _warnShutdownTime;
+
+    friend class debug_commandscript;
 };
 
 TC_GAME_API extern Realm realm;

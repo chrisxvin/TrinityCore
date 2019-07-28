@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2018 TrinityCore <https://www.trinitycore.org/>
+ * Copyright (C) 2008-2019 TrinityCore <https://www.trinitycore.org/>
  * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -48,6 +48,7 @@
 #include "GroupMgr.h"
 #include "GuildMgr.h"
 #include "InstanceSaveMgr.h"
+#include "IPLocation.h"
 #include "Language.h"
 #include "LFGMgr.h"
 #include "Log.h"
@@ -201,6 +202,25 @@ void World::SetClosed(bool val)
     sScriptMgr->OnOpenStateChange(!val);
 }
 
+void World::LoadDBAllowedSecurityLevel()
+{
+    PreparedStatement* stmt = LoginDatabase.GetPreparedStatement(LOGIN_SEL_REALMLIST_SECURITY_LEVEL);
+    stmt->setInt32(0, int32(realm.Id.Realm));
+    PreparedQueryResult result = LoginDatabase.Query(stmt);
+
+    if (result)
+        SetPlayerSecurityLimit(AccountTypes(result->Fetch()->GetUInt8()));
+}
+
+void World::SetPlayerSecurityLimit(AccountTypes _sec)
+{
+    AccountTypes sec = _sec < SEC_CONSOLE ? _sec : SEC_PLAYER;
+    bool update = sec > m_allowedSecurityLevel;
+    m_allowedSecurityLevel = sec;
+    if (update)
+        KickAllLess(m_allowedSecurityLevel);
+}
+
 void World::TriggerGuidWarning()
 {
     // Lock this only to prevent multiple maps triggering at the same time
@@ -210,11 +230,11 @@ void World::TriggerGuidWarning()
     time_t today = (gameTime / DAY) * DAY;
 
     // Check if our window to restart today has passed. 5 mins until quiet time
-    while (gameTime >= (today + (getIntConfig(CONFIG_RESPAWN_RESTARTQUIETTIME) * HOUR) - 1810))
+    while (gameTime >= GetLocalHourTimestamp(today, getIntConfig(CONFIG_RESPAWN_RESTARTQUIETTIME)) - 1810)
         today += DAY;
 
     // Schedule restart for 30 minutes before quiet time, or as long as we have
-    _warnShutdownTime = today + (getIntConfig(CONFIG_RESPAWN_RESTARTQUIETTIME) * HOUR) - 1800;
+    _warnShutdownTime = GetLocalHourTimestamp(today, getIntConfig(CONFIG_RESPAWN_RESTARTQUIETTIME)) - 1800;
 
     _guidWarn = true;
     SendGuidWarning();
@@ -523,6 +543,10 @@ void World::LoadConfigSettings(bool reload)
     rate_values[RATE_XP_BG_KILL]  = sConfigMgr->GetFloatDefault("Rate.XP.BattlegroundKill", 1.0f);
     rate_values[RATE_XP_QUEST]    = sConfigMgr->GetFloatDefault("Rate.XP.Quest", 1.0f);
     rate_values[RATE_XP_EXPLORE]  = sConfigMgr->GetFloatDefault("Rate.XP.Explore", 1.0f);
+
+    m_int_configs[CONFIG_XP_BOOST_DAYMASK] = sConfigMgr->GetIntDefault("XP.Boost.Daymask", 0);
+    rate_values[RATE_XP_BOOST] = sConfigMgr->GetFloatDefault("XP.Boost.Rate", 2.0f);
+
     rate_values[RATE_REPAIRCOST]  = sConfigMgr->GetFloatDefault("Rate.RepairCost", 1.0f);
     if (rate_values[RATE_REPAIRCOST] < 0.0f)
     {
@@ -1045,13 +1069,6 @@ void World::LoadConfigSettings(bool reload)
         m_int_configs[CONFIG_MAX_OVERSPEED_PINGS] = 2;
     }
 
-    m_bool_configs[CONFIG_SAVE_RESPAWN_TIME_IMMEDIATELY] = sConfigMgr->GetBoolDefault("SaveRespawnTimeImmediately", true);
-    if (!m_bool_configs[CONFIG_SAVE_RESPAWN_TIME_IMMEDIATELY])
-    {
-        TC_LOG_WARN("server.loading", "SaveRespawnTimeImmediately triggers assertions when disabled, overridden to Enabled");
-        m_bool_configs[CONFIG_SAVE_RESPAWN_TIME_IMMEDIATELY] = true;
-    }
-
     m_bool_configs[CONFIG_WEATHER] = sConfigMgr->GetBoolDefault("ActivateWeather", true);
 
     m_int_configs[CONFIG_DISABLE_BREATHING] = sConfigMgr->GetIntDefault("DisableWaterBreath", SEC_CONSOLE);
@@ -1161,6 +1178,7 @@ void World::LoadConfigSettings(bool reload)
     m_bool_configs[CONFIG_BG_XP_FOR_KILL]                            = sConfigMgr->GetBoolDefault("Battleground.GiveXPForKills", false);
     m_int_configs[CONFIG_ARENA_MAX_RATING_DIFFERENCE]                = sConfigMgr->GetIntDefault ("Arena.MaxRatingDifference", 150);
     m_int_configs[CONFIG_ARENA_RATING_DISCARD_TIMER]                 = sConfigMgr->GetIntDefault ("Arena.RatingDiscardTimer", 10 * MINUTE * IN_MILLISECONDS);
+    m_int_configs[CONFIG_ARENA_PREV_OPPONENTS_DISCARD_TIMER]         = sConfigMgr->GetIntDefault ("Arena.PreviousOpponentsDiscardTimer", 2 * MINUTE * IN_MILLISECONDS);
     m_int_configs[CONFIG_ARENA_RATED_UPDATE_TIMER]                   = sConfigMgr->GetIntDefault ("Arena.RatedUpdateTimer", 5 * IN_MILLISECONDS);
     m_bool_configs[CONFIG_ARENA_AUTO_DISTRIBUTE_POINTS]              = sConfigMgr->GetBoolDefault("Arena.AutoDistributePoints", false);
     m_int_configs[CONFIG_ARENA_AUTO_DISTRIBUTE_INTERVAL_DAYS]        = sConfigMgr->GetIntDefault ("Arena.AutoDistributeInterval", 7);
@@ -1486,6 +1504,9 @@ void World::LoadConfigSettings(bool reload)
 /// Initialize the World
 void World::SetInitialWorldSettings()
 {
+    if (uint32 realmId = sConfigMgr->GetIntDefault("RealmID", 0)) // 0 reserved for auth
+        sLog->SetRealmId(realmId);
+
     ///- Server startup begin
     uint32 startupBegin = getMSTime();
 
@@ -1555,6 +1576,9 @@ void World::SetInitialWorldSettings()
     // Load cinematic cameras
     LoadM2Cameras(m_dataPath);
 
+    // Load IP Location Database
+    sIPLocation->Load();
+
     std::vector<uint32> mapIds;
     for (uint32 mapId = 0; mapId < sMapStore.GetNumRows(); mapId++)
         if (sMapStore.LookupEntry(mapId))
@@ -1590,6 +1614,9 @@ void World::SetInitialWorldSettings()
     TC_LOG_INFO("server.loading", "Loading SpellInfo immunity infos...");
     sSpellMgr->LoadSpellInfoImmunities();
 
+    TC_LOG_INFO("server.loading", "Loading Player Totem models...");
+    sObjectMgr->LoadPlayerTotemModels();
+
     TC_LOG_INFO("server.loading", "Loading GameObject models...");
     LoadGameObjectModelList(m_dataPath);
 
@@ -1599,7 +1626,7 @@ void World::SetInitialWorldSettings()
     TC_LOG_INFO("server.loading", "Loading Instance Template...");
     sObjectMgr->LoadInstanceTemplate();
 
-    // Must be called before `creature_respawn`/`gameobject_respawn` tables
+    // Must be called before `respawn` data
     TC_LOG_INFO("server.loading", "Loading instances...");
     sInstanceSaveMgr->LoadInstances();
 
@@ -1618,11 +1645,13 @@ void World::SetInitialWorldSettings()
     sObjectMgr->LoadItemLocales();
     sObjectMgr->LoadItemSetNameLocales();
     sObjectMgr->LoadQuestLocales();
+    sObjectMgr->LoadQuestOfferRewardLocale();
+    sObjectMgr->LoadQuestRequestItemsLocale();
     sObjectMgr->LoadNpcTextLocales();
     sObjectMgr->LoadPageTextLocales();
     sObjectMgr->LoadGossipMenuItemsLocales();
     sObjectMgr->LoadPointOfInterestLocales();
-    sObjectMgr->LoadQuestGreetingsLocales();
+    sObjectMgr->LoadQuestGreetingLocales();
 
     sObjectMgr->SetDBCLocaleIndex(GetDefaultDbcLocale());        // Get once for all the locale index of DBC language (console/broadcasts)
     TC_LOG_INFO("server.loading", ">> Localization strings loaded in %u ms", GetMSTimeDiffToNow(oldMSTime));
@@ -1917,17 +1946,20 @@ void World::SetInitialWorldSettings()
     TC_LOG_INFO("server.loading", "Loading GameTeleports...");
     sObjectMgr->LoadGameTele();
 
+    TC_LOG_INFO("server.loading", "Loading Trainers...");       // must be after LoadCreatureTemplates
+    sObjectMgr->LoadTrainers();
+
+    TC_LOG_INFO("server.loading", "Loading Creature default trainers...");
+    sObjectMgr->LoadCreatureDefaultTrainers();
+
     TC_LOG_INFO("server.loading", "Loading Gossip menu...");
     sObjectMgr->LoadGossipMenu();
 
     TC_LOG_INFO("server.loading", "Loading Gossip menu options...");
-    sObjectMgr->LoadGossipMenuItems();
+    sObjectMgr->LoadGossipMenuItems();                           // must be after LoadTrainers
 
     TC_LOG_INFO("server.loading", "Loading Vendors...");
     sObjectMgr->LoadVendors();                                   // must be after load CreatureTemplate and ItemTemplate
-
-    TC_LOG_INFO("server.loading", "Loading Trainers...");
-    sObjectMgr->LoadTrainerSpell();                              // must be after load CreatureTemplate
 
     TC_LOG_INFO("server.loading", "Loading Waypoints...");
     sWaypointMgr->Load();
@@ -2024,7 +2056,6 @@ void World::SetInitialWorldSettings()
     LoginDatabase.PExecute("INSERT INTO uptime (realmid, starttime, uptime, revision) VALUES(%u, %u, 0, '%s')",
                             realm.Id.Realm, uint32(GameTime::GetStartTime()), GitRevision::GetFullVersion());       // One-time query
 
-    m_timers[WUPDATE_WEATHERS].SetInterval(1*IN_MILLISECONDS);
     m_timers[WUPDATE_AUCTIONS].SetInterval(MINUTE*IN_MILLISECONDS);
     m_timers[WUPDATE_AUCTIONS_PENDING].SetInterval(250);
     m_timers[WUPDATE_UPTIME].SetInterval(m_int_configs[CONFIG_UPTIME_UPDATE]*MINUTE*IN_MILLISECONDS);
@@ -2142,9 +2173,6 @@ void World::SetInitialWorldSettings()
     TC_LOG_INFO("server.worldserver", "World initialized in %u minutes %u seconds", (startupDuration / 60000), ((startupDuration % 60000) / 1000));
 
     TC_METRIC_EVENT("events", "World initialized", "World initialized in " + std::to_string(startupDuration / 60000) + " minutes " + std::to_string((startupDuration % 60000) / 1000) + " seconds");
-
-    if (uint32 realmId = sConfigMgr->GetIntDefault("RealmID", 0)) // 0 reserved for auth
-        sLog->SetRealmId(realmId);
 }
 
 void World::DetectDBCLang()
@@ -2316,13 +2344,6 @@ void World::Update(uint32 diff)
     UpdateSessions(diff);
     sWorldUpdateTime.RecordUpdateTimeDuration("UpdateSessions");
 
-    /// <li> Handle weather updates when the timer has passed
-    if (m_timers[WUPDATE_WEATHERS].Passed())
-    {
-        m_timers[WUPDATE_WEATHERS].Reset();
-        WeatherMgr::Update(uint32(m_timers[WUPDATE_WEATHERS].GetInterval()));
-    }
-
     /// <li> Update uptime table
     if (m_timers[WUPDATE_UPTIME].Passed())
     {
@@ -2388,6 +2409,9 @@ void World::Update(uint32 diff)
         m_timers[WUPDATE_DELETECHARS].Reset();
         Player::DeleteOldCharacters();
     }
+
+    sGroupMgr->Update(diff);
+    sWorldUpdateTime.RecordUpdateTimeDuration("UpdateGroupMgr");
 
     sLFGMgr->Update(diff);
     sWorldUpdateTime.RecordUpdateTimeDuration("UpdateLFGMgr");
@@ -2457,7 +2481,7 @@ void World::ForceGameEventUpdate()
 }
 
 /// Send a packet to all players (except self if mentioned)
-void World::SendGlobalMessage(WorldPacket* packet, WorldSession* self, uint32 team)
+void World::SendGlobalMessage(WorldPacket const* packet, WorldSession* self, uint32 team)
 {
     SessionMap::const_iterator itr;
     for (itr = m_sessions.begin(); itr != m_sessions.end(); ++itr)
@@ -2474,7 +2498,7 @@ void World::SendGlobalMessage(WorldPacket* packet, WorldSession* self, uint32 te
 }
 
 /// Send a packet to all GMs (except self if mentioned)
-void World::SendGlobalGMMessage(WorldPacket* packet, WorldSession* self, uint32 team)
+void World::SendGlobalGMMessage(WorldPacket const* packet, WorldSession* self, uint32 team)
 {
     for (SessionMap::const_iterator itr = m_sessions.begin(); itr != m_sessions.end(); ++itr)
     {
@@ -2602,7 +2626,7 @@ void World::SendGlobalText(char const* text, WorldSession* self)
 }
 
 /// Send a packet to all players (or players selected team) in the zone (except self if mentioned)
-bool World::SendZoneMessage(uint32 zone, WorldPacket* packet, WorldSession* self, uint32 team)
+bool World::SendZoneMessage(uint32 zone, WorldPacket const* packet, WorldSession* self, uint32 team)
 {
     bool foundPlayerToSend = false;
     SessionMap::const_iterator itr;
@@ -3131,6 +3155,8 @@ void World::InitDailyQuestResetTime(bool loading)
         m_NextDailyQuestReset = mostRecentQuestTime;
     else // plan next reset time
         m_NextDailyQuestReset = (curTime >= curDayResetTime) ? curDayResetTime + DAY : curDayResetTime;
+
+    sWorld->setWorldState(WS_DAILY_QUEST_RESET_TIME, uint64(m_NextDailyQuestReset));
 }
 
 void World::InitMonthlyQuestResetTime()
@@ -3209,25 +3235,6 @@ void World::ResetDailyQuests()
 
     // change available dailies
     sPoolMgr->ChangeDailyQuests();
-}
-
-void World::LoadDBAllowedSecurityLevel()
-{
-    PreparedStatement* stmt = LoginDatabase.GetPreparedStatement(LOGIN_SEL_REALMLIST_SECURITY_LEVEL);
-    stmt->setInt32(0, int32(realm.Id.Realm));
-    PreparedQueryResult result = LoginDatabase.Query(stmt);
-
-    if (result)
-        SetPlayerSecurityLimit(AccountTypes(result->Fetch()->GetUInt8()));
-}
-
-void World::SetPlayerSecurityLimit(AccountTypes _sec)
-{
-    AccountTypes sec = _sec < SEC_CONSOLE ? _sec : SEC_PLAYER;
-    bool update = sec > m_allowedSecurityLevel;
-    m_allowedSecurityLevel = sec;
-    if (update)
-        KickAllLess(m_allowedSecurityLevel);
 }
 
 void World::ResetWeeklyQuests()

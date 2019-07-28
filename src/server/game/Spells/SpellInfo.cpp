@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2018 TrinityCore <https://www.trinitycore.org/>
+ * Copyright (C) 2008-2019 TrinityCore <https://www.trinitycore.org/>
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -181,7 +181,7 @@ uint32 SpellImplicitTargetInfo::GetExplicitTargetMask(bool& srcSet, bool& dstSet
                                 targetMask = TARGET_FLAG_UNIT_PASSENGER;
                                 break;
                             case TARGET_CHECK_RAID_CLASS:
-                                // nobreak;
+                                /* fallthrough */
                             default:
                                 targetMask = TARGET_FLAG_UNIT;
                                 break;
@@ -211,7 +211,7 @@ uint32 SpellImplicitTargetInfo::GetExplicitTargetMask(bool& srcSet, bool& dstSet
     return targetMask;
 }
 
-SpellImplicitTargetInfo::StaticData  SpellImplicitTargetInfo::_data[TOTAL_SPELL_TARGETS] =
+SpellImplicitTargetInfo::StaticData SpellImplicitTargetInfo::_data[TOTAL_SPELL_TARGETS] =
 {
     {TARGET_OBJECT_TYPE_NONE, TARGET_REFERENCE_TYPE_NONE,   TARGET_SELECT_CATEGORY_NYI,     TARGET_CHECK_DEFAULT,  TARGET_DIR_NONE},        //
     {TARGET_OBJECT_TYPE_UNIT, TARGET_REFERENCE_TYPE_CASTER, TARGET_SELECT_CATEGORY_DEFAULT, TARGET_CHECK_DEFAULT,  TARGET_DIR_NONE},        // 1 TARGET_UNIT_CASTER
@@ -408,7 +408,7 @@ int32 SpellEffectInfo::CalcValue(WorldObject const* caster /*= nullptr*/, int32 
     // base amount modification based on spell lvl vs caster lvl
     if (casterUnit && basePointsPerLevel != 0.0f)
     {
-        int32 level = int32(casterUnit->getLevel());
+        int32 level = int32(casterUnit->GetLevel());
         if (level > int32(_spellInfo->MaxLevel) && _spellInfo->MaxLevel > 0)
             level = int32(_spellInfo->MaxLevel);
         else if (level < int32(_spellInfo->BaseLevel))
@@ -451,7 +451,7 @@ int32 SpellEffectInfo::CalcValue(WorldObject const* caster /*= nullptr*/, int32 
     {
         // amount multiplication based on caster's level
         if (!casterUnit->IsControlledByPlayer() &&
-            _spellInfo->SpellLevel && _spellInfo->SpellLevel != casterUnit->getLevel() &&
+            _spellInfo->SpellLevel && _spellInfo->SpellLevel != casterUnit->GetLevel() &&
             !basePointsPerLevel && _spellInfo->HasAttribute(SPELL_ATTR0_LEVEL_DAMAGE_CALCULATION))
         {
             bool canEffectScale = false;
@@ -495,7 +495,7 @@ int32 SpellEffectInfo::CalcValue(WorldObject const* caster /*= nullptr*/, int32 
             if (canEffectScale)
             {
                 GtNPCManaCostScalerEntry const* spellScaler = sGtNPCManaCostScalerStore.LookupEntry(_spellInfo->SpellLevel - 1);
-                GtNPCManaCostScalerEntry const* casterScaler = sGtNPCManaCostScalerStore.LookupEntry(casterUnit->getLevel() - 1);
+                GtNPCManaCostScalerEntry const* casterScaler = sGtNPCManaCostScalerStore.LookupEntry(casterUnit->GetLevel() - 1);
                 if (spellScaler && casterScaler)
                     value *= casterScaler->ratio / spellScaler->ratio;
             }
@@ -545,7 +545,7 @@ float SpellEffectInfo::CalcRadius(WorldObject* caster /*= nullptr*/, Spell* spel
     if (caster)
     {
         if (Unit* casterUnit = caster->ToUnit())
-            radius += RadiusEntry->RadiusPerLevel * casterUnit->getLevel();
+            radius += RadiusEntry->RadiusPerLevel * casterUnit->GetLevel();
 
         radius = std::min(radius, RadiusEntry->RadiusMax);
 
@@ -595,7 +595,7 @@ SpellTargetObjectTypes SpellEffectInfo::GetUsedTargetObjectType() const
     return _data[Effect].UsedTargetObjectType;
 }
 
-SpellEffectInfo::StaticData  SpellEffectInfo::_data[TOTAL_SPELL_EFFECTS] =
+SpellEffectInfo::StaticData SpellEffectInfo::_data[TOTAL_SPELL_EFFECTS] =
 {
     // implicit target type           used target object type
     {EFFECT_IMPLICIT_TARGET_NONE,     TARGET_OBJECT_TYPE_NONE}, // 0
@@ -809,7 +809,7 @@ SpellInfo::SpellInfo(SpellEntry const* spellEntry)
     BaseLevel = spellEntry->baseLevel;
     SpellLevel = spellEntry->spellLevel;
     DurationEntry = spellEntry->DurationIndex ? sSpellDurationStore.LookupEntry(spellEntry->DurationIndex) : nullptr;
-    PowerType = spellEntry->powerType;
+    PowerType = static_cast<Powers>(spellEntry->powerType);
     ManaCost = spellEntry->manaCost;
     ManaCostPerlevel = spellEntry->manaCostPerlevel;
     ManaPerSecond = spellEntry->manaPerSecond;
@@ -1573,7 +1573,6 @@ SpellCastResult SpellInfo::CheckLocation(uint32 map_id, uint32 zone_id, uint32 a
         case 2584:                                          // Waiting to Resurrect
         case 22011:                                         // Spirit Heal Channel
         case 22012:                                         // Spirit Heal
-        case 24171:                                         // Resurrection Impact Visual
         case 42792:                                         // Recently Dropped Flag
         case 43681:                                         // Inactive
         case 44535:                                         // Spirit Heal (mana)
@@ -2223,6 +2222,7 @@ void SpellInfo::_LoadSpellSpecific()
                         /// @workaround For non-stacking tracking spells (We need generic solution)
                         if (Id == 30645) // Gas Cloud Tracking
                             return SPELL_SPECIFIC_NORMAL;
+                        /* fallthrough */
                     case SPELL_AURA_TRACK_RESOURCES:
                     case SPELL_AURA_TRACK_STEALTHED:
                         return SPELL_SPECIFIC_TRACKER;
@@ -2612,7 +2612,7 @@ void SpellInfo::_LoadImmunityInfo()
                                 immuneInfo.AuraTypeImmune.insert(SPELL_AURA_MOD_ROOT);
                                 immuneInfo.AuraTypeImmune.insert(SPELL_AURA_MOD_CONFUSE);
                                 immuneInfo.AuraTypeImmune.insert(SPELL_AURA_MOD_FEAR);
-                                // no break intended
+                                /* fallthrough */
                             case 61869: // Overload
                             case 63481:
                             case 61887: // Lightning Tendrils
@@ -3162,7 +3162,7 @@ int32 SpellInfo::CalcPowerCost(WorldObject const* caster, SpellSchoolMask school
             return unitCaster->GetHealth();
         // Else drain all power
         if (PowerType < MAX_POWERS)
-            return unitCaster->GetPower(Powers(PowerType));
+            return unitCaster->GetPower(PowerType);
         TC_LOG_ERROR("spells", "SpellInfo::CalcPowerCost: Unknown power type '%d' in spell %d", PowerType, Id);
         return 0;
     }
@@ -3185,7 +3185,7 @@ int32 SpellInfo::CalcPowerCost(WorldObject const* caster, SpellSchoolMask school
             case POWER_FOCUS:
             case POWER_ENERGY:
             case POWER_HAPPINESS:
-                powerCost += int32(CalculatePct(unitCaster->GetMaxPower(Powers(PowerType)), ManaCostPercentage));
+                powerCost += int32(CalculatePct(unitCaster->GetMaxPower(PowerType), ManaCostPercentage));
                 break;
             case POWER_RUNE:
             case POWER_RUNIC_POWER:
@@ -3221,7 +3221,7 @@ int32 SpellInfo::CalcPowerCost(WorldObject const* caster, SpellSchoolMask school
         if (HasAttribute(SPELL_ATTR0_LEVEL_DAMAGE_CALCULATION))
         {
             GtNPCManaCostScalerEntry const* spellScaler = sGtNPCManaCostScalerStore.LookupEntry(SpellLevel - 1);
-            GtNPCManaCostScalerEntry const* casterScaler = sGtNPCManaCostScalerStore.LookupEntry(unitCaster->getLevel() - 1);
+            GtNPCManaCostScalerEntry const* casterScaler = sGtNPCManaCostScalerStore.LookupEntry(unitCaster->GetLevel() - 1);
             if (spellScaler && casterScaler)
                 powerCost *= casterScaler->ratio / spellScaler->ratio;
         }
@@ -3392,15 +3392,22 @@ bool _isPositiveEffectImpl(SpellInfo const* spellInfo, uint8 effIndex, std::unor
 
     visited.insert({ spellInfo->Id, effIndex });
 
+    //We need scaling level info for some auras that compute bp 0 or positive but should be debuffs
+    float bpScalePerLevel = spellInfo->Effects[effIndex].RealPointsPerLevel;
     int32 bp = spellInfo->Effects[effIndex].CalcValue();
     switch (spellInfo->SpellFamilyName)
     {
         case SPELLFAMILY_GENERIC:
             switch (spellInfo->Id)
             {
+                case 40268: // Spiritual Vengeance, Teron Gorefiend, Black Temple
                 case 61987: // Avenging Wrath Marker
                 case 61988: // Divine Shield exclude aura
+                case 64412: // Phase Punch, Algalon the Observer, Ulduar
+                case 72410: // Rune of Blood, Saurfang, Icecrown Citadel
+                case 71204: // Touch of Insignificance, Lady Deathwhisper, Icecrown Citadel
                     return false;
+                case 24732: // Bat Costume
                 case 30877: // Tag Murloc
                 case 61716: // Rabbit Costume
                 case 61734: // Noblegarden Bunny
@@ -3411,6 +3418,11 @@ bool _isPositiveEffectImpl(SpellInfo const* spellInfo, uint8 effIndex, std::unor
                 default:
                     break;
             }
+            break;
+        case SPELLFAMILY_ROGUE:
+            // Shadow of Death, Teron Gorefiend, Black Temple
+            if (spellInfo->Id == 40251)
+                return false;
             break;
         case SPELLFAMILY_MAGE:
             // Amplify Magic, Dampen Magic
@@ -3437,11 +3449,19 @@ bool _isPositiveEffectImpl(SpellInfo const* spellInfo, uint8 effIndex, std::unor
             // Aspect of the Viper
             if (spellInfo->Id == 34074)
                 return true;
+            // Explosive Shot
+            if (spellInfo->SpellFamilyFlags[1] == SPELLFAMILYFLAG1_HUNTER_EXPLOSIVE_SHOT)
+                return false;
             break;
         case SPELLFAMILY_DRUID:
             // Starfall
             if (spellInfo->SpellFamilyFlags[2] == 0x00000100)
                 return false;
+            break;
+        case SPELLFAMILY_DEATHKNIGHT:
+            if (spellInfo->SpellFamilyFlags[2] == 0x00000010) // Ebon Plague
+                return false;
+            break;
         default:
             break;
     }
@@ -3493,6 +3513,8 @@ bool _isPositiveEffectImpl(SpellInfo const* spellInfo, uint8 effIndex, std::unor
                 case SPELL_AURA_SCHOOL_HEAL_ABSORB:
                 case SPELL_AURA_CHANNEL_DEATH_ITEM:
                 case SPELL_AURA_EMPATHY:
+                case SPELL_AURA_MOD_DAMAGE_FROM_CASTER:
+                case SPELL_AURA_PREVENTS_FLEEING:
                     return false;
                 default:
                     break;
@@ -3605,17 +3627,19 @@ bool _isPositiveEffectImpl(SpellInfo const* spellInfo, uint8 effIndex, std::unor
             case SPELL_AURA_MOD_INCREASE_HEALTH_PERCENT:
             case SPELL_AURA_MOD_TOTAL_STAT_PERCENTAGE:
             case SPELL_AURA_MOD_INCREASE_SWIM_SPEED:
-                if (bp < 0)
+                if (bp < 0 || bpScalePerLevel < 0) //TODO: What if both are 0? Should it be a buff or debuff?
                     return false;
                 break;
             case SPELL_AURA_MOD_ATTACKSPEED:            // some buffs have negative bp, check both target and bp
             case SPELL_AURA_MOD_MELEE_HASTE:
+            case SPELL_AURA_HASTE_RANGED:
             case SPELL_AURA_MOD_RESISTANCE_PCT:
             case SPELL_AURA_MOD_RATING:
             case SPELL_AURA_MOD_ATTACK_POWER:
             case SPELL_AURA_MOD_RANGED_ATTACK_POWER:
             case SPELL_AURA_MOD_DAMAGE_PERCENT_DONE:
-                if (!_isPositiveTarget(spellInfo, effIndex) && bp < 0)
+            case SPELL_AURA_MOD_SPEED_SLOW_ALL:
+                if (!_isPositiveTarget(spellInfo, effIndex) || bp < 0)
                     return false;
                 break;
             case SPELL_AURA_MOD_DAMAGE_TAKEN:           // dependent from basepoint sign (positive -> negative)
@@ -3625,6 +3649,7 @@ bool _isPositiveEffectImpl(SpellInfo const* spellInfo, uint8 effIndex, std::unor
             case SPELL_AURA_MOD_ATTACKER_SPELL_CRIT_CHANCE:
             case SPELL_AURA_MOD_POWER_COST_SCHOOL:
             case SPELL_AURA_MOD_POWER_COST_SCHOOL_PCT:
+            case SPELL_AURA_MOD_MECHANIC_DAMAGE_TAKEN_PERCENT:
                 if (bp > 0)
                     return false;
                 break;
@@ -3684,7 +3709,8 @@ bool _isPositiveEffectImpl(SpellInfo const* spellInfo, uint8 effIndex, std::unor
             case SPELL_AURA_MOD_ATTACKER_MELEE_CRIT_DAMAGE:
             case SPELL_AURA_MOD_ATTACKER_RANGED_CRIT_DAMAGE:
             case SPELL_AURA_MOD_ATTACKER_SPELL_AND_WEAPON_CRIT_CHANCE:
-                // have positive and negative spells, check target
+            case SPELL_AURA_DUMMY:
+                // check target for positive and negative spells
                 if (!_isPositiveTarget(spellInfo, effIndex))
                     return false;
                 break;

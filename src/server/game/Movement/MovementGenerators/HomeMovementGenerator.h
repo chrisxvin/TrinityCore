@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2018 TrinityCore <https://www.trinitycore.org/>
+ * Copyright (C) 2008-2019 TrinityCore <https://www.trinitycore.org/>
  * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -25,20 +25,18 @@ template <class T>
 class HomeMovementGenerator : public MovementGeneratorMedium< T, HomeMovementGenerator<T> >
 {
     public:
-        explicit HomeMovementGenerator() : _arrived(false), _skipToHome(false) { }
+        explicit HomeMovementGenerator();
 
         MovementGeneratorType GetMovementGeneratorType() const override;
 
         void DoInitialize(T*);
-        void DoFinalize(T*);
         void DoReset(T*);
         bool DoUpdate(T*, uint32);
+        void DoDeactivate(T*);
+        void DoFinalize(T*, bool, bool);
 
     private:
         void SetTargetLocation(T*);
-
-        bool _arrived;
-        bool _skipToHome;
 };
 
 #endif

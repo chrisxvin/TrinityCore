@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2018 TrinityCore <https://www.trinitycore.org/>
+ * Copyright (C) 2008-2019 TrinityCore <https://www.trinitycore.org/>
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -263,12 +263,12 @@ uint32 CreatureTextMgr::SendChat(Creature* source, uint8 textGroup, WorldObject 
 
     if (srcPlr)
     {
-        PlayerTextBuilder builder(source, finalSource, finalSource->getGender(), finalType, iter->groupId, iter->id, finalLang, whisperTarget);
+        PlayerTextBuilder builder(source, finalSource, finalSource->GetGender(), finalType, iter->groupId, iter->id, finalLang, whisperTarget);
         SendChatPacket(finalSource, builder, finalType, whisperTarget, range, team, gmOnly);
     }
     else
     {
-        CreatureTextBuilder builder(finalSource, finalSource->getGender(), finalType, iter->groupId, iter->id, finalLang, whisperTarget);
+        CreatureTextBuilder builder(finalSource, finalSource->GetGender(), finalType, iter->groupId, iter->id, finalLang, whisperTarget);
         SendChatPacket(finalSource, builder, finalType, whisperTarget, range, team, gmOnly);
     }
 

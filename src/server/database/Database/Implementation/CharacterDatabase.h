@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2018 TrinityCore <https://www.trinitycore.org/>
+ * Copyright (C) 2008-2019 TrinityCore <https://www.trinitycore.org/>
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -262,16 +262,11 @@ enum CharacterDatabaseStatements : uint32
     CHAR_DEL_CORPSE,
     CHAR_DEL_CORPSES_FROM_MAP,
     CHAR_SEL_CORPSE_LOCATION,
-
-    CHAR_SEL_CREATURE_RESPAWNS,
-    CHAR_REP_CREATURE_RESPAWN,
-    CHAR_DEL_CREATURE_RESPAWN,
-    CHAR_DEL_CREATURE_RESPAWN_BY_INSTANCE,
-
-    CHAR_SEL_GO_RESPAWNS,
-    CHAR_REP_GO_RESPAWN,
-    CHAR_DEL_GO_RESPAWN,
-    CHAR_DEL_GO_RESPAWN_BY_INSTANCE,
+    
+    CHAR_SEL_RESPAWNS,
+    CHAR_REP_RESPAWN,
+    CHAR_DEL_RESPAWN,
+    CHAR_DEL_ALL_RESPAWNS,
 
     CHAR_SEL_GM_TICKETS,
     CHAR_REP_GM_TICKET,
@@ -335,6 +330,7 @@ enum CharacterDatabaseStatements : uint32
     CHAR_DEL_CHARACTER_SOCIAL,
     CHAR_UPD_CHARACTER_SOCIAL_NOTE,
     CHAR_UPD_CHARACTER_POSITION,
+    CHAR_UPD_CHARACTER_POSITION_BY_MAPID,
 
     CHAR_INS_LFG_DATA,
     CHAR_DEL_LFG_DATA,

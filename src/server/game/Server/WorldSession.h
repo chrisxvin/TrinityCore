@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2018 TrinityCore <https://www.trinitycore.org/>
+ * Copyright (C) 2008-2019 TrinityCore <https://www.trinitycore.org/>
  * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -30,7 +30,10 @@
 #include "Packet.h"
 #include "QueryCallbackProcessor.h"
 #include "SharedDefines.h"
+#include <string>
+#include <map>
 #include <unordered_map>
+#include <boost/circular_buffer.hpp>
 
 class BigNumber;
 class Creature;
@@ -57,13 +60,13 @@ struct TradeStatusInfo;
 
 namespace lfg
 {
-struct LfgJoinResultData;
-struct LfgPlayerBoot;
-struct LfgProposal;
-struct LfgQueueStatusData;
-struct LfgPlayerRewardData;
-struct LfgRoleCheck;
-struct LfgUpdateData;
+    struct LfgJoinResultData;
+    struct LfgPlayerBoot;
+    struct LfgProposal;
+    struct LfgQueueStatusData;
+    struct LfgPlayerRewardData;
+    struct LfgRoleCheck;
+    struct LfgUpdateData;
 }
 
 namespace rbac
@@ -73,6 +76,11 @@ class RBACData;
 
 namespace WorldPackets
 {
+    namespace NPC
+    {
+        class Hello;
+        class TrainerBuySpell;
+    }
     namespace Query
     {
         class QueryCreature;
@@ -83,6 +91,10 @@ namespace WorldPackets
     namespace Quest
     {
         class QueryQuestInfo;
+    }
+    namespace Totem
+    {
+        class TotemDestroyed;
     }
 }
 
@@ -166,7 +178,7 @@ public:
     virtual ~PacketFilter() { }
 
     virtual bool Process(WorldPacket* /*packet*/) { return true; }
-    virtual bool ProcessLogout() const { return true; }
+    virtual bool ProcessUnsafe() const { return true; }
 
 protected:
     WorldSession* const m_pSession;
@@ -184,7 +196,7 @@ public:
 
     virtual bool Process(WorldPacket* packet) override;
     //in Map::Update() we do not process player logout!
-    virtual bool ProcessLogout() const override { return false; }
+    virtual bool ProcessUnsafe() const override { return false; }
 };
 
 //class used to filer only thread-unsafe packets from queue
@@ -335,6 +347,9 @@ class TC_GAME_API WorldSession
 
         void LogoutPlayer(bool save);
         void KickPlayer();
+        // Returns true if all contained hyperlinks are valid
+        // May kick player on false depending on world config (handler should abort)
+        bool ValidateHyperlinksAndMaybeKick(std::string const& str);
 
         void QueuePacket(WorldPacket* new_packet);
         bool Update(uint32 diff, PacketFilter& updater);
@@ -344,8 +359,7 @@ class TC_GAME_API WorldSession
 
         void SendNameQueryOpcode(ObjectGuid guid);
 
-        void SendTrainerList(ObjectGuid guid);
-        void SendTrainerList(ObjectGuid guid, std::string const& strTitle);
+        void SendTrainerList(Creature* npc);
         void SendListInventory(ObjectGuid guid);
         void SendShowBank(ObjectGuid guid);
         bool CanOpenMailBox(ObjectGuid guid);
@@ -430,7 +444,6 @@ class TC_GAME_API WorldSession
 
         uint32 GetLatency() const { return m_latency; }
         void SetLatency(uint32 latency) { m_latency = latency; }
-        void ResetClientTimeDelay() { m_clientTimeDelay = 0; }
 
         std::atomic<time_t> m_timeOutTime;
 
@@ -441,6 +454,10 @@ class TC_GAME_API WorldSession
         // Recruit-A-Friend Handling
         uint32 GetRecruiterId() const { return recruiterId; }
         bool IsARecruiter() const { return isRecruiter; }
+
+        // Time Synchronisation
+        void ResetTimeSync();
+        void SendTimeSync();
 
     public:                                                 // opcodes handlers
 
@@ -648,8 +665,8 @@ class TC_GAME_API WorldSession
         void HandleTabardVendorActivateOpcode(WorldPacket& recvPacket);
         void HandleBankerActivateOpcode(WorldPacket& recvPacket);
         void HandleBuyBankSlotOpcode(WorldPacket& recvPacket);
-        void HandleTrainerListOpcode(WorldPacket& recvPacket);
-        void HandleTrainerBuySpellOpcode(WorldPacket& recvPacket);
+        void HandleTrainerListOpcode(WorldPackets::NPC::Hello& packet);
+        void HandleTrainerBuySpellOpcode(WorldPackets::NPC::TrainerBuySpell& packet);
         void HandlePetitionShowListOpcode(WorldPacket& recvPacket);
         void HandleGossipHelloOpcode(WorldPacket& recvPacket);
         void HandleGossipSelectOptionOpcode(WorldPacket& recvPacket);
@@ -815,7 +832,7 @@ class TC_GAME_API WorldSession
 
         void HandleSetActionBarToggles(WorldPacket& recvData);
 
-        void HandleTotemDestroyed(WorldPacket& recvData);
+        void HandleTotemDestroyed(WorldPackets::Totem::TotemDestroyed& totemDestroyed);
         void HandleDismissCritter(WorldPacket& recvData);
 
         //Battleground
@@ -1044,8 +1061,6 @@ class TC_GAME_API WorldSession
         std::string _accountName;
         uint8 m_expansion;
 
-        typedef std::list<AddonInfo> AddonsList;
-
         // Warden
         Warden* _warden;                                    // Remains NULL if Warden system is not enabled by config
 
@@ -1058,11 +1073,30 @@ class TC_GAME_API WorldSession
         LocaleConstant m_sessionDbcLocale;
         LocaleConstant m_sessionDbLocaleIndex;
         std::atomic<uint32> m_latency;
-        std::atomic<uint32> m_clientTimeDelay;
         AccountData m_accountData[NUM_ACCOUNT_DATA_TYPES];
         uint32 m_Tutorials[MAX_ACCOUNT_TUTORIAL_VALUES];
         uint8  m_TutorialsChanged;
-        AddonsList m_addonsList;
+        struct Addons
+        {
+            struct SecureAddonInfo
+            {
+                enum SecureAddonStatus : uint8
+                {
+                    BANNED          = 0,
+                    SECURE_VISIBLE  = 1,
+                    SECURE_HIDDEN   = 2
+                };
+
+                std::string Name;
+                SecureAddonStatus Status = BANNED;
+                bool HasKey = false;
+            };
+
+            static uint32 constexpr MaxSecureAddons = 25;
+
+            std::vector<SecureAddonInfo> SecureAddons;
+            uint32 LastBannedAddOnTimestamp = 0;
+        } _addons;
         uint32 recruiterId;
         bool isRecruiter;
         LockedQueue<WorldPacket*> _recvQueue;
@@ -1070,6 +1104,15 @@ class TC_GAME_API WorldSession
         uint32 expireTime;
         bool forceExit;
         ObjectGuid m_currentBankerGUID;
+
+        boost::circular_buffer<std::pair<int64, uint32>> _timeSyncClockDeltaQueue; // first member: clockDelta. Second member: latency of the packet exchange that was used to compute that clockDelta.
+        int64 _timeSyncClockDelta;
+        void ComputeNewClockDelta();
+
+        std::map<uint32, uint32> _pendingTimeSyncRequests; // key: counter. value: server time when packet with that counter was sent.
+        uint32 _timeSyncNextCounter;
+        uint32 _timeSyncTimer;
+
 
         WorldSession(WorldSession const& right) = delete;
         WorldSession& operator=(WorldSession const& right) = delete;

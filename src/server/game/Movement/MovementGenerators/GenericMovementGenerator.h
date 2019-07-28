@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2018 TrinityCore <https://www.trinitycore.org/>
+ * Copyright (C) 2008-2019 TrinityCore <https://www.trinitycore.org/>
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -14,7 +14,7 @@
  * You should have received a copy of the GNU General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
- 
+
 #ifndef TRINITY_GENERICMOVEMENTGENERATOR_H
 #define TRINITY_GENERICMOVEMENTGENERATOR_H
 
@@ -29,12 +29,13 @@ enum MovementGeneratorType : uint8;
 class GenericMovementGenerator : public MovementGenerator
 {
     public:
-        explicit GenericMovementGenerator(Movement::MoveSplineInit&& splineInit, MovementGeneratorType type, uint32 id) : _splineInit(std::move(splineInit)), _type(type), _pointId(id), _duration(0) { }
+        explicit GenericMovementGenerator(Movement::MoveSplineInit&& splineInit, MovementGeneratorType type, uint32 id);
 
         void Initialize(Unit*) override;
-        void Finalize(Unit*) override;
-        void Reset(Unit*) override { }
+        void Reset(Unit*) override;
         bool Update(Unit*, uint32) override;
+        void Deactivate(Unit*) override;
+        void Finalize(Unit*, bool, bool) override;
         MovementGeneratorType GetMovementGeneratorType() const override { return _type; }
 
     private:

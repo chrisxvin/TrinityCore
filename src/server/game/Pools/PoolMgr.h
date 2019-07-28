@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2018 TrinityCore <https://www.trinitycore.org/>
+ * Copyright (C) 2008-2019 TrinityCore <https://www.trinitycore.org/>
  * Copyright (C) 2005-2009 MaNGOS <http://www.mangosproject.org/>
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -27,13 +27,13 @@
 
 struct PoolTemplateData
 {
-    uint32  MaxLimit;
+    uint32 MaxLimit;
 };
 
 struct PoolObject
 {
-    ObjectGuid::LowType  guid;
-    float   chance;
+    ObjectGuid::LowType guid;
+    float chance;
     PoolObject(ObjectGuid::LowType _guid, float _chance) : guid(_guid), chance(std::fabs(_chance)) { }
 };
 

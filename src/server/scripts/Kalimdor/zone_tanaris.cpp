@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2018 TrinityCore <https://www.trinitycore.org/>
+ * Copyright (C) 2008-2019 TrinityCore <https://www.trinitycore.org/>
  * Copyright (C) 2006-2009 ScriptDev2 <https://scriptdev2.svn.sourceforge.net/>
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -279,8 +279,7 @@ enum Tooga
     QUEST_TOOGA                 = 1560,
     NPC_TORTA                   = 6015,
 
-    POINT_ID_TO_WATER           = 1,
-    FACTION_TOOG_ESCORTEE       = 113
+    POINT_ID_TO_WATER           = 1
 };
 
 Position const ToWaterLoc = {-7032.664551f, -4906.199219f, -1.606446f, 0.0f};
@@ -417,7 +416,7 @@ public:
         void QuestAccept(Player* player, Quest const* quest) override
         {
             if (quest->GetQuestId() == QUEST_TOOGA)
-                StartFollow(player, FACTION_TOOG_ESCORTEE, quest);
+                StartFollow(player, FACTION_ESCORTEE_N_NEUTRAL_PASSIVE, quest);
         }
     };
 

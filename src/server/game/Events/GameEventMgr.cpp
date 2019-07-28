@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2018 TrinityCore <https://www.trinitycore.org/>
+ * Copyright (C) 2008-2019 TrinityCore <https://www.trinitycore.org/>
  * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -30,7 +30,7 @@
 #include "PoolMgr.h"
 #include "Player.h"
 #include "World.h"
-#include "WorldPacket.h"
+#include "WorldStatePackets.h"
 
 GameEventMgr* GameEventMgr::instance()
 {
@@ -413,6 +413,10 @@ void GameEventMgr::LoadFromDB()
                     continue;
                 }
 
+                // Log error for pooled object, but still spawn it
+                if (uint32 poolId = sPoolMgr->IsPartOfAPool(SPAWN_TYPE_CREATURE, guid))
+                    TC_LOG_ERROR("sql.sql", "`game_event_creature`: game event id (%i) contains creature (%u) which is part of a pool (%u). This should be spawned in game_event_pool", event_id, guid, poolId);
+
                 GuidList& crelist = mGameEventCreatureGuids[internal_event_id];
                 crelist.push_back(guid);
 
@@ -458,6 +462,10 @@ void GameEventMgr::LoadFromDB()
                     TC_LOG_ERROR("sql.sql", "`game_event_gameobject`: game event id (%i) is out of range compared to max event id in `game_event`.", event_id);
                     continue;
                 }
+
+                // Log error for pooled object, but still spawn it
+                if (uint32 poolId = sPoolMgr->IsPartOfAPool(SPAWN_TYPE_GAMEOBJECT, guid))
+                    TC_LOG_ERROR("sql.sql", "`game_event_gameobject`: game event id (%i) contains game object (%u) which is part of a pool (%u). This should be spawned in game_event_pool", event_id, guid, poolId);
 
                 GuidList& golist = mGameEventGameobjectGuids[internal_event_id];
                 golist.push_back(guid);
@@ -1255,6 +1263,7 @@ void GameEventMgr::GameEventSpawn(int16 event_id)
 
             // Spawn if necessary (loaded grids only)
             Map* map = sMapMgr->CreateBaseMap(data->spawnPoint.GetMapId());
+            map->RemoveRespawnTime(SPAWN_TYPE_CREATURE, *itr);
             // We use spawn coords to spawn
             if (!map->Instanceable() && map->IsGridLoaded(data->spawnPoint))
             {
@@ -1282,6 +1291,7 @@ void GameEventMgr::GameEventSpawn(int16 event_id)
             // Spawn if necessary (loaded grids only)
             // this base map checked as non-instanced and then only existed
             Map* map = sMapMgr->CreateBaseMap(data->spawnPoint.GetMapId());
+            map->RemoveRespawnTime(SPAWN_TYPE_GAMEOBJECT, *itr);
             // We use current coords to unspawn, not spawn coords since creature can have changed grid
             if (!map->Instanceable() && map->IsGridLoaded(data->spawnPoint))
             {
@@ -1333,6 +1343,7 @@ void GameEventMgr::GameEventUnspawn(int16 event_id)
 
             sMapMgr->DoForAllMapsWithMapId(data->spawnPoint.GetMapId(), [&itr](Map* map)
             {
+                map->RemoveRespawnTime(SPAWN_TYPE_CREATURE, *itr);
                 auto creatureBounds = map->GetCreatureBySpawnIdStore().equal_range(*itr);
                 for (auto itr2 = creatureBounds.first; itr2 != creatureBounds.second;)
                 {
@@ -1363,6 +1374,7 @@ void GameEventMgr::GameEventUnspawn(int16 event_id)
 
             sMapMgr->DoForAllMapsWithMapId(data->spawnPoint.GetMapId(), [&itr](Map* map)
             {
+                map->RemoveRespawnTime(SPAWN_TYPE_GAMEOBJECT, *itr);
                 auto gameobjectBounds = map->GetGameObjectBySpawnIdStore().equal_range(*itr);
                 for (auto itr2 = gameobjectBounds.first; itr2 != gameobjectBounds.second;)
                 {
@@ -1569,9 +1581,10 @@ void GameEventMgr::UpdateWorldStates(uint16 event_id, bool Activate)
             BattlemasterListEntry const* bl = sBattlemasterListStore.LookupEntry(bgTypeId);
             if (bl && bl->HolidayWorldStateId)
             {
-                WorldPacket data;
-                sBattlegroundMgr->BuildUpdateWorldStatePacket(&data, bl->HolidayWorldStateId, Activate ? 1 : 0);
-                sWorld->SendGlobalMessage(&data);
+                WorldPackets::WorldState::UpdateWorldState worldstate;
+                worldstate.VariableID = bl->HolidayWorldStateId;
+                worldstate.Value = Activate ? 1 : 0;
+                sWorld->SendGlobalMessage(worldstate.Write());
             }
         }
     }
@@ -1687,7 +1700,7 @@ public:
     void Visit(std::unordered_map<ObjectGuid, Creature*>& creatureMap)
     {
         for (auto const& p : creatureMap)
-            if (p.second->IsInWorld() && p.second->IsAIEnabled)
+            if (p.second->IsInWorld() && p.second->IsAIEnabled())
                 p.second->AI()->OnGameEvent(_activate, _eventId);
     }
 

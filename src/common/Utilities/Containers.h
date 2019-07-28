@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2018 TrinityCore <https://www.trinitycore.org/>
+ * Copyright (C) 2008-2019 TrinityCore <https://www.trinitycore.org/>
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -18,9 +18,12 @@
 #ifndef TRINITY_CONTAINERS_H
 #define TRINITY_CONTAINERS_H
 
+#include "advstd.h"
 #include "Define.h"
 #include "Random.h"
 #include <algorithm>
+#include <exception>
+#include <iterator>
 #include <utility>
 #include <vector>
 
@@ -37,6 +40,34 @@ namespace Trinity
     {
         return std::addressof(not_ptr);
     }
+
+    template <class T>
+    class CheckedBufferOutputIterator
+    {
+        public:
+            using iterator_category = std::output_iterator_tag;
+            using value_type = void;
+            using pointer = T*;
+            using reference = T&;
+            using difference_type = std::ptrdiff_t;
+
+            CheckedBufferOutputIterator(T* buf, size_t n) : _buf(buf), _end(buf+n) {}
+
+            T& operator*() const { check(); return *_buf; }
+            CheckedBufferOutputIterator& operator++() { check(); ++_buf; return *this; }
+            CheckedBufferOutputIterator operator++(int) { CheckedBufferOutputIterator v = *this; operator++(); return v; }
+
+            size_t remaining() const { return (_end - _buf); }
+
+        private:
+            T* _buf;
+            T* _end;
+            void check() const
+            {
+                if (!(_buf < _end))
+                    throw std::out_of_range("index");
+            }
+    };
 
     namespace Containers
     {
@@ -68,7 +99,8 @@ namespace Trinity
                 // this element has chance (elementsToKeep / elementsToProcess) of being kept
                 if (urand(1, elementsToProcess) <= elementsToKeep)
                 {
-                    *keepIt = std::move(*curIt);
+                    if (keepIt != curIt)
+                        *keepIt = std::move(*curIt);
                     ++keepIt;
                     --elementsToKeep;
                 }
@@ -208,6 +240,34 @@ namespace Trinity
                     itr = multimap.erase(itr);
                 else
                     ++itr;
+            }
+        }
+
+        template <typename Container, typename Predicate>
+        std::enable_if_t<advstd::is_move_assignable_v<decltype(*std::declval<Container>().begin())>, void> EraseIf(Container& c, Predicate p)
+        {
+            auto wpos = c.begin();
+            for (auto rpos = c.begin(), end = c.end(); rpos != end; ++rpos)
+            {
+                if (!p(*rpos))
+                {
+                    if (rpos != wpos)
+                        std::swap(*rpos, *wpos);
+                    ++wpos;
+                }
+            }
+            c.erase(wpos, c.end());
+        }
+
+        template <typename Container, typename Predicate>
+        std::enable_if_t<!advstd::is_move_assignable_v<decltype(*std::declval<Container>().begin())>, void> EraseIf(Container& c, Predicate p)
+        {
+            for (auto it = c.begin(); it != c.end();)
+            {
+                if (p(*it))
+                    it = c.erase(it);
+                else
+                    ++it;
             }
         }
     }

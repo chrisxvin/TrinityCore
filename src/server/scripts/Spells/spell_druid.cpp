@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2018 TrinityCore <https://www.trinitycore.org/>
+ * Copyright (C) 2008-2019 TrinityCore <https://www.trinitycore.org/>
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -93,6 +93,11 @@ enum DruidSpells
     SPELL_DRUID_FRENZIED_REGENERATION_HEAL  = 22845
 };
 
+enum MiscSpells
+{
+    SPELL_CATEGORY_MANGLE_BEAR              = 971
+};
+
 // 22812 - Barkskin
 class spell_dru_barkskin : public SpellScriptLoader
 {
@@ -175,6 +180,27 @@ class spell_dru_bear_form_passive : public SpellScriptLoader
         {
             return new spell_dru_bear_form_passive_AuraScript();
         }
+};
+
+// 50334 - Berserk
+class spell_dru_berserk : public AuraScript
+{
+    PrepareAuraScript(spell_dru_berserk);
+
+    void HandleEffectApply(AuraEffect const* /*aurEff*/, AuraEffectHandleModes /*mode*/)
+    {
+        // Remove cooldown on Mangle (bear)
+        GetTarget()->GetSpellHistory()->ResetCooldowns([](SpellHistory::CooldownStorageType::iterator itr) -> bool
+        {
+            SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(itr->first);
+            return spellInfo && spellInfo->GetCategory() == SPELL_CATEGORY_MANGLE_BEAR;
+        }, true);
+    }
+
+    void Register() override
+    {
+        AfterEffectApply += AuraEffectApplyFn(spell_dru_berserk::HandleEffectApply, EFFECT_1, SPELL_AURA_ADD_FLAT_MODIFIER, AURA_EFFECT_HANDLE_REAL);
+    }
 };
 
 // -1850 - Dash
@@ -572,7 +598,7 @@ class spell_dru_glyph_of_innervate : public SpellScriptLoader
 
                 Unit* caster = eventInfo.GetActor();
                 SpellInfo const* spellInfo = sSpellMgr->AssertSpellInfo(SPELL_DRUID_GLYPH_OF_INNERVATE_REGEN);
-                int32 amount = CalculatePct(static_cast<int32>(caster->GetCreatePowers(POWER_MANA)), aurEff->GetAmount());
+                int32 amount = CalculatePct(static_cast<int32>(caster->GetCreatePowerValue(POWER_MANA)), aurEff->GetAmount());
 
                 ASSERT(spellInfo->GetMaxTicks() > 0);
                 amount /= spellInfo->GetMaxTicks();
@@ -878,7 +904,7 @@ class spell_dru_innervate : public SpellScriptLoader
                 }
 
                 if (Unit* caster = GetCaster())
-                    amount = int32(CalculatePct(caster->GetCreatePowers(POWER_MANA), amount) / aurEff->GetTotalTicks());
+                    amount = int32(CalculatePct(caster->GetCreatePowerValue(POWER_MANA), amount) / aurEff->GetTotalTicks());
                 else
                     amount = 0;
             }
@@ -1023,7 +1049,7 @@ class spell_dru_lifebloom : public SpellScriptLoader
                 CastSpellExtraArgs args(aurEff);
                 args.OriginalCaster = GetCasterGUID();
                 args.AddSpellBP0(healAmount);
-                target->CastSpell(GetTarget(), SPELL_DRUID_LIFEBLOOM_FINAL_HEAL, args);
+                target->CastSpell(target, SPELL_DRUID_LIFEBLOOM_FINAL_HEAL, args);
             }
 
             void AfterRemove(AuraEffect const* aurEff, AuraEffectHandleModes /*mode*/)
@@ -1033,7 +1059,7 @@ class spell_dru_lifebloom : public SpellScriptLoader
                     return;
 
                 // final heal
-                OnRemoveEffect(GetTarget(), aurEff, GetStackAmount());
+                OnRemoveEffect(GetUnitOwner(), aurEff, GetStackAmount());
             }
 
             void HandleDispel(DispelInfo* dispelInfo)
@@ -1232,7 +1258,7 @@ class spell_dru_owlkin_frenzy : public SpellScriptLoader
 
             void CalculateAmount(AuraEffect const* /*aurEff*/, int32& amount, bool& /*canBeRecalculated*/)
             {
-                amount = CalculatePct(GetUnitOwner()->GetCreatePowers(POWER_MANA), amount);
+                amount = CalculatePct(GetUnitOwner()->GetCreatePowerValue(POWER_MANA), amount);
             }
 
             void Register() override
@@ -2355,6 +2381,7 @@ void AddSC_druid_spell_scripts()
 {
     new spell_dru_barkskin();
     new spell_dru_bear_form_passive();
+    RegisterAuraScript(spell_dru_berserk);
     new spell_dru_dash();
     new spell_dru_eclipse();
     new spell_dru_enrage();

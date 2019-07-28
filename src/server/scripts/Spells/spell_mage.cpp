@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2018 TrinityCore <https://www.trinitycore.org/>
+ * Copyright (C) 2008-2019 TrinityCore <https://www.trinitycore.org/>
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -33,7 +33,7 @@
 enum MageSpells
 {
     SPELL_MAGE_BLAZING_SPEED                     = 31643,
-    SPELL_MAGE_BURNOUT                           = 29077,
+    SPELL_MAGE_BURNOUT                           = 44450,
     SPELL_MAGE_COLD_SNAP                         = 11958,
     SPELL_MAGE_FOCUS_MAGIC_PROC                  = 54648,
     SPELL_MAGE_FROST_WARDING_R1                  = 11189,
