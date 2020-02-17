@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2019 TrinityCore <https://www.trinitycore.org/>
+ * This file is part of the TrinityCore Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -202,6 +202,7 @@ class instance_blood_furnace : public InstanceMapScript
             void ResetPrisoners(GuidSet& prisoners)
             {
                 for (GuidSet::const_iterator i = prisoners.begin(); i != prisoners.end();)
+                {
                     if (Creature * prisoner = instance->GetCreature(*i))
                     {
                         if (!prisoner->IsAlive())
@@ -211,6 +212,9 @@ class instance_blood_furnace : public InstanceMapScript
 
                         ResetPrisoner(prisoner);
                     }
+                    else
+                        ++i;
+                }
             }
 
             void ResetPrisoner(Creature* prisoner)
@@ -219,6 +223,8 @@ class instance_blood_furnace : public InstanceMapScript
                     prisoner->Respawn(true);
                 prisoner->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE);
                 prisoner->SetImmuneToAll(true);
+                if (prisoner->IsAIEnabled())
+                    prisoner->AI()->EnterEvadeMode();
             }
 
             void StorePrisoner(Creature* creature)

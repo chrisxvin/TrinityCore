@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2019 TrinityCore <https://www.trinitycore.org/>
+ * This file is part of the TrinityCore Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -274,7 +274,16 @@ void SmartAI::ReturnToLastOOCPos()
 
 void SmartAI::UpdateAI(uint32 diff)
 {
+    if (!me->IsAlive())
+    {
+        if (IsEngaged())
+            EngagementOver();
+        return;
+    }
+
     CheckConditions(diff);
+
+    bool hasVictim = UpdateVictim();
 
     GetScript()->OnUpdate(diff);
 
@@ -285,7 +294,7 @@ void SmartAI::UpdateAI(uint32 diff)
     if (!IsAIControlled())
         return;
 
-    if (!UpdateVictim())
+    if (!hasVictim)
         return;
 
     if (_canAutoAttack)

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2019 TrinityCore <https://www.trinitycore.org/>
+ * This file is part of the TrinityCore Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -190,7 +190,7 @@ void ThreatManager::Initialize()
 
 void ThreatManager::Update(uint32 tdiff)
 {
-    if (!CanHaveThreatList() || IsThreatListEmpty())
+    if (!CanHaveThreatList() || IsThreatListEmpty(true))
         return;
     if (_updateTimer <= tdiff)
     {
@@ -578,7 +578,7 @@ ThreatReference const* ThreatManager::ReselectVictim()
 void ThreatManager::ProcessAIUpdates()
 {
     CreatureAI* ai = ASSERT_NOTNULL(_owner->ToCreature())->AI();
-    std::vector<ThreatReference const*> v(std::move(_needsAIUpdate)); // _needClientUpdate is now empty in case this triggers a recursive call
+    std::vector<ThreatReference const*> v(std::move(_needsAIUpdate)); // _needsAIUpdate is now empty in case this triggers a recursive call
     if (!ai)
         return;
     for (ThreatReference const* ref : v)

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2019 TrinityCore <https://www.trinitycore.org/>
+ * This file is part of the TrinityCore Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -28,8 +28,8 @@ enum CharacterDatabaseStatements : uint32
         name for a suiting suffix.
     */
 
-    CHAR_DEL_QUEST_POOL_SAVE,
-    CHAR_INS_QUEST_POOL_SAVE,
+    CHAR_DEL_POOL_QUEST_SAVE,
+    CHAR_INS_POOL_QUEST_SAVE,
     CHAR_DEL_NONEXISTENT_GUILD_BANK_ITEM,
     CHAR_DEL_EXPIRED_BANS,
     CHAR_SEL_CHECK_NAME,
@@ -191,11 +191,10 @@ enum CharacterDatabaseStatements : uint32
     CHAR_DEL_GUILD_MEMBER_WITHDRAW,
     CHAR_SEL_CHAR_DATA_FOR_GUILD,
 
-    CHAR_SEL_CHANNEL,
-    CHAR_INS_CHANNEL,
     CHAR_UPD_CHANNEL,
     CHAR_UPD_CHANNEL_USAGE,
     CHAR_UPD_CHANNEL_OWNERSHIP,
+    CHAR_DEL_CHANNEL,
     CHAR_DEL_OLD_CHANNELS,
 
     CHAR_UPD_EQUIP_SET,
@@ -349,7 +348,6 @@ enum CharacterDatabaseStatements : uint32
     CHAR_SEL_PINFO_BANS,
     CHAR_SEL_CHAR_HOMEBIND,
     CHAR_SEL_CHAR_GUID_NAME_BY_ACC,
-    CHAR_SEL_POOL_QUEST_SAVE,
     CHAR_SEL_CHARACTER_AT_LOGIN,
     CHAR_SEL_CHAR_CLASS_LVL_AT_LOGIN,
     CHAR_SEL_CHAR_CUSTOMIZE_INFO,

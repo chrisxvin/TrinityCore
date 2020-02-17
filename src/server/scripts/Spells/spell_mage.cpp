@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2019 TrinityCore <https://www.trinitycore.org/>
+ * This file is part of the TrinityCore Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -532,7 +532,8 @@ class spell_mage_empowered_fire : public SpellScriptLoader
 
                 Unit* target = GetTarget();
                 CastSpellExtraArgs args(aurEff);
-                args.AddSpellBP0(CalculatePct(target->GetCreateMana(), aurEff->GetAmount()));
+                uint8 percent = sSpellMgr->AssertSpellInfo(SPELL_MAGE_EMPOWERED_FIRE_PROC)->Effects[EFFECT_0].CalcValue();
+                args.AddSpellBP0(CalculatePct(target->GetCreateMana(), percent));
                 target->CastSpell(target, SPELL_MAGE_EMPOWERED_FIRE_PROC, args);
             }
 

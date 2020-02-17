@@ -1,6 +1,5 @@
 /*
- * Copyright (C) 2008-2019 TrinityCore <https://www.trinitycore.org/>
- * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
+ * This file is part of the TrinityCore Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -35,7 +34,7 @@ struct AuctionHouseEntry;
 #define MAX_AUCTION_ITEMS 160
 #define MAX_GETALL_RETURN 55000
 
-enum AuctionError
+enum AuctionError : uint8
 {
     ERR_AUCTION_OK                  = 0,
     ERR_AUCTION_INVENTORY           = 1,
@@ -48,7 +47,7 @@ enum AuctionError
     ERR_AUCTION_RESTRICTED_ACCOUNT  = 13
 };
 
-enum AuctionAction
+enum AuctionAction : uint8
 {
     AUCTION_SELL_ITEM   = 0,
     AUCTION_CANCEL      = 1,
@@ -194,7 +193,7 @@ class TC_GAME_API AuctionHouseMgr
 
         void AddAItem(Item* it);
         bool RemoveAItem(ObjectGuid::LowType id, bool deleteItem = false, SQLTransaction* trans = nullptr);
-        bool PendingAuctionAdd(Player* player, AuctionEntry* aEntry, Item* item);
+        bool PendingAuctionAdd(Player* player, AuctionEntry* aEntry);
         uint32 PendingAuctionCount(Player const* player) const;
         void PendingAuctionProcess(Player* player);
         void UpdatePendingAuctions();

@@ -1,6 +1,5 @@
 /*
- * Copyright (C) 2008-2019 TrinityCore <https://www.trinitycore.org/>
- * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
+ * This file is part of the TrinityCore Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -61,7 +60,7 @@ void GuardAI::EnterEvadeMode(EvadeReason /*why*/)
         return;
     }
 
-    TC_LOG_TRACE("scritps.ai", "GuardAI::EnterEvadeMode: %s enters evade mode.", me->GetGUID().ToString().c_str());
+    TC_LOG_TRACE("scripts.ai", "GuardAI::EnterEvadeMode: %s enters evade mode.", me->GetGUID().ToString().c_str());
 
     me->RemoveAllAuras();
     me->CombatStop(true);
@@ -72,6 +71,7 @@ void GuardAI::EnterEvadeMode(EvadeReason /*why*/)
 
 void GuardAI::JustDied(Unit* killer)
 {
-    if (Player* player = killer->GetCharmerOrOwnerPlayerOrPlayerItself())
-        me->SendZoneUnderAttackMessage(player);
+    if (killer)
+        if (Player* player = killer->GetCharmerOrOwnerPlayerOrPlayerItself())
+            me->SendZoneUnderAttackMessage(player);
 }

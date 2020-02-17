@@ -1,6 +1,5 @@
 /*
- * Copyright (C) 2008-2019 TrinityCore <https://www.trinitycore.org/>
- * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
+ * This file is part of the TrinityCore Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -1181,7 +1180,7 @@ namespace Trinity
     class NearestHostileUnitInAggroRangeCheck
     {
         public:
-            explicit NearestHostileUnitInAggroRangeCheck(Creature const* creature, bool useLOS = false) : _me(creature), _useLOS(useLOS) { }
+            explicit NearestHostileUnitInAggroRangeCheck(Creature const* creature, bool useLOS = false, bool ignoreCivilians = false) : _me(creature), _useLOS(useLOS), _ignoreCivilians(ignoreCivilians) { }
 
             bool operator()(Unit* u) const
             {
@@ -1197,12 +1196,19 @@ namespace Trinity
                 if (_useLOS && !u->IsWithinLOSInMap(_me))
                     return false;
 
+                // pets in aggressive do not attack civilians
+                if (_ignoreCivilians)
+                    if (Creature* c = u->ToCreature())
+                        if (c->IsCivilian())
+                            return false;
+
                 return true;
             }
 
         private:
             Creature const* _me;
             bool _useLOS;
+            bool _ignoreCivilians;
             NearestHostileUnitInAggroRangeCheck(NearestHostileUnitInAggroRangeCheck const&) = delete;
     };
 

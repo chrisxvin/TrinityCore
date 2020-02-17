@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2019 TrinityCore <https://www.trinitycore.org/>
+ * This file is part of the TrinityCore Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -283,7 +283,11 @@ enum RBACPermissions
     RBAC_PERM_COMMAND_GM_LIST                                = 375,
     RBAC_PERM_COMMAND_GM_VISIBLE                             = 376,
     RBAC_PERM_COMMAND_GO                                     = 377,
-    // unused 378-386
+    RBAC_PERM_COMMAND_ACCOUNT_2FA                            = 378,
+    RBAC_PERM_COMMAND_ACCOUNT_2FA_SETUP                      = 379,
+    RBAC_PERM_COMMAND_ACCOUNT_2FA_REMOVE                     = 380,
+    RBAC_PERM_COMMAND_ACCOUNT_SET_2FA                        = 381,
+    // unused 382-386
     RBAC_PERM_COMMAND_GOBJECT                                = 387,
     RBAC_PERM_COMMAND_GOBJECT_ACTIVATE                       = 388,
     RBAC_PERM_COMMAND_GOBJECT_ADD                            = 389,

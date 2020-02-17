@@ -1,6 +1,5 @@
 /*
- * Copyright (C) 2008-2019 TrinityCore <https://www.trinitycore.org/>
- * Copyright (C) 2006-2009 ScriptDev2 <https://scriptdev2.svn.sourceforge.net/>
+ * This file is part of the TrinityCore Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -326,7 +325,7 @@ public:
                 if (me->IsWithinDistInMap(who, INTERACTION_DISTANCE))
                 {
                     Player* player = GetLeaderForFollower();
-                    if (player && player->GetQuestStatus(QUEST_TOOGA) == QUEST_STATUS_INCOMPLETE)
+                    if (player)
                         player->GroupEventHappens(QUEST_TOOGA, me);
 
                     TortaGUID = who->GetGUID();
@@ -339,10 +338,7 @@ public:
         {
             FollowerAI::MovementInform(MotionType, PointId);
 
-            if (MotionType != POINT_MOTION_TYPE)
-                return;
-
-            if (PointId == POINT_ID_TO_WATER)
+            if ((MotionType == POINT_MOTION_TYPE) && (PointId == POINT_ID_TO_WATER))
                 SetFollowComplete();
         }
 
@@ -416,7 +412,7 @@ public:
         void QuestAccept(Player* player, Quest const* quest) override
         {
             if (quest->GetQuestId() == QUEST_TOOGA)
-                StartFollow(player, FACTION_ESCORTEE_N_NEUTRAL_PASSIVE, quest);
+                StartFollow(player, FACTION_ESCORTEE_N_NEUTRAL_PASSIVE, QUEST_TOOGA);
         }
     };
 
